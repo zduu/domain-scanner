@@ -45,6 +45,8 @@ jobs:
 
   scan:
     needs: [build, lint]
+    # Set job timeout to 30 days (43200 minutes) to allow long scans
+    timeout-minutes: 43200
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

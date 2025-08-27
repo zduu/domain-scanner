@@ -1,0 +1,346 @@
+name: Batch Domain Scanner
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_start:
+        description: 'Starting batch index (0-25)'
+        required: false
+        default: '0'
+        type: choice
+        options:
+          - 0
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+          - 11
+          - 12
+          - 13
+          - 14
+          - 15
+          - 16
+          - 17
+          - 18
+          - 19
+          - 20
+          - 21
+          - 22
+          - 23
+          - 24
+          - 25
+      batch_size:
+        description: 'Number of batches to run (1-26)'
+        required: false
+        default: '26'
+        type: choice
+        options:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+          - 11
+          - 12
+          - 13
+          - 14
+          - 15
+          - 16
+          - 17
+          - 18
+          - 19
+          - 20
+          - 21
+          - 22
+          - 23
+          - 24
+          - 25
+          - 26
+      max_parallel:
+        description: 'Maximum number of concurrent jobs (1-10)'
+        required: false
+        default: '5'
+        type: choice
+        options:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+      base_domain:
+        description: 'Domain suffix to scan'
+        required: false
+        default: '.de'
+        type: choice
+        options:
+          - .de
+          - .com
+          - .net
+          - .org
+          - .io
+          - .ai
+          - .li
+      domain_length:
+        description: 'Domain name length'
+        required: false
+        default: '4'
+        type: choice
+        options:
+          - 3
+          - 4
+          - 5
+          - 6
+      pattern:
+        description: 'Domain pattern'
+        required: false
+        default: 'D'
+        type: choice
+        options:
+          - 'D'  # Letters
+          - 'd'  # Digits
+          - 'a'  # Alphanumeric
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      batch_start: ${{ steps.set-outputs.outputs.batch_start }}
+      batch_size: ${{ steps.set-outputs.outputs.batch_size }}
+      base_domain: ${{ steps.set-outputs.outputs.base_domain }}
+      domain_length: ${{ steps.set-outputs.outputs.domain_length }}
+      pattern: ${{ steps.set-outputs.outputs.pattern }}
+      job_matrix: ${{ steps.set-outputs.outputs.job_matrix }}
+      max_parallel: ${{ steps.set-outputs.outputs.max_parallel }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      
+      - name: Generate batch configurations
+        run: |
+          BATCH_START=${{ github.event.inputs.batch_start || 0 }}
+          BATCH_SIZE=${{ github.event.inputs.batch_size || 26 }}
+          BASE_DOMAIN=${{ github.event.inputs.base_domain || '.de' }}
+          DOMAIN_LENGTH=${{ github.event.inputs.domain_length || 4 }}
+          PATTERN=${{ github.event.inputs.pattern || 'D' }}
+          
+          echo "Generating batch configurations..."
+          echo "Batch start: $BATCH_START"
+          echo "Batch size: $BATCH_SIZE"
+          echo "Base domain: $BASE_DOMAIN"
+          echo "Domain length: $DOMAIN_LENGTH"
+          echo "Pattern: $PATTERN"
+          
+          # Create config directory if it doesn't exist
+          mkdir -p ./config
+          
+          # Run the config generation tool with parameters (using Go run to avoid platform issues)
+          go run utils/generate_batch_configs.go -batch-start $BATCH_START -batch-size $BATCH_SIZE -base-domain $BASE_DOMAIN -domain-length $DOMAIN_LENGTH -pattern $PATTERN
+          
+          # List generated config files for verification
+          echo "Generated config files:"
+          ls -la ./config/
+      
+      - name: Upload config files as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: batch-configs
+          path: ./config/
+      
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          BATCH_START=${{ github.event.inputs.batch_start || '0' }}
+          BATCH_SIZE=${{ github.event.inputs.batch_size || '26' }}
+          MAX_PARALLEL=${{ github.event.inputs.max_parallel || '5' }}
+          BASE_DOMAIN=${{ github.event.inputs.base_domain || '.de' }}
+          DOMAIN_LENGTH=${{ github.event.inputs.domain_length || '4' }}
+          PATTERN=${{ github.event.inputs.pattern || 'D' }}
+          
+          # Ensure MAX_PARALLEL is never empty
+          if [ -z "$MAX_PARALLEL" ]; then
+            MAX_PARALLEL=5
+          fi
+          
+          echo "batch_start=$BATCH_START" >> $GITHUB_OUTPUT
+          echo "batch_size=$BATCH_SIZE" >> $GITHUB_OUTPUT
+          echo "max_parallel=$MAX_PARALLEL" >> $GITHUB_OUTPUT
+          echo "base_domain=$BASE_DOMAIN" >> $GITHUB_OUTPUT
+          echo "domain_length=$DOMAIN_LENGTH" >> $GITHUB_OUTPUT
+          echo "pattern=$PATTERN" >> $GITHUB_OUTPUT
+          
+          # Generate job matrix
+          MATRIX='{"include":['
+          END_INDEX=$((BATCH_START + BATCH_SIZE - 1))
+          for ((i=BATCH_START; i<=END_INDEX; i++)); do
+            LETTER=$(echo "abcdefghijklmnopqrstuvwxyz" | cut -c$((i+1)))
+            MATRIX+="{\"letter\":\"$LETTER\",\"index\":$i}"
+            if [ $i -lt $END_INDEX ]; then
+              MATRIX+=","
+            fi
+          done
+          MATRIX+="]}"
+          echo "job_matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  scan:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hours timeout
+    strategy:
+      matrix: ${{ fromJson(needs.prepare.outputs.job_matrix) }}
+      max-parallel: ${{ fromJson(needs.prepare.outputs.max_parallel) || 5 }}  # Limit concurrent jobs to prevent resource exhaustion
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      
+      - name: Download config files
+        uses: actions/download-artifact@v4
+        with:
+          name: batch-configs
+          path: ./config/
+      
+      - name: Create output directory
+        run: mkdir -p ./results/batch_${{ matrix.letter }}
+      
+      - name: Run domain scanner for batch "${{ matrix.letter }}"
+        run: |
+          echo "Starting batch scan for domains starting with '${{ matrix.letter }}'"
+          echo "Config file: ./config/config_batch_${{ matrix.letter }}.toml"
+          echo "Job index: ${{ matrix.index }}"
+          
+          # Run scanner with resource limits
+          # Limit memory usage to prevent runner exhaustion
+          GOGC=20 go run . -config ./config/config_batch_${{ matrix.letter }}.toml
+          
+          echo "Batch scan completed for '${{ matrix.letter }}'"
+      - name: Check disk space
+        if: always()
+        run: df -h
+      - name: Check memory usage
+        if: always()
+        run: free -h
+      
+      - name: Upload results for batch "${{ matrix.letter }}"
+        uses: actions/upload-artifact@v4
+        with:
+          name: domain-scan-results-batch-${{ matrix.letter }}
+          path: ./results/batch_${{ matrix.letter }}/
+
+  summarize:
+    needs: [scan, prepare]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      
+      - name: Download config files
+        uses: actions/download-artifact@v4
+        with:
+          name: batch-configs
+          path: ./config/
+      
+      - name: Download all artifacts
+        run: |
+          BATCH_START=${{ needs.prepare.outputs.batch_start }}
+          BATCH_SIZE=${{ needs.prepare.outputs.batch_size }}
+          
+          echo "Downloading results for all batches..."
+          
+          for ((i=BATCH_START; i<BATCH_START+BATCH_SIZE; i++)); do
+            LETTER=$(echo "abcdefghijklmnopqrstuvwxyz" | cut -c$((i+1)))
+            echo "Downloading results for batch $LETTER"
+            gh run download ${{ github.run_id }} --name domain-scan-results-batch-$LETTER --dir batch_results || echo "No results found for batch $LETTER"
+          done
+      
+      - name: Combine results
+        run: |
+          echo "Combining results from all batches..."
+          
+          # Create combined results directory
+          mkdir -p combined_results
+          
+          # Combine available domains
+          find batch_results -name "available_domains_batch_*.txt" -exec cat {} \; 2>/dev/null > combined_results/available_domains_all.txt || touch combined_results/available_domains_all.txt
+          
+          # Combine registered domains
+          find batch_results -name "registered_domains_batch_*.txt" -exec cat {} \; 2>/dev/null > combined_results/registered_domains_all.txt || touch combined_results/registered_domains_all.txt
+          
+          # Combine special status domains
+          find batch_results -name "special_status_domains_batch_*.txt" -exec cat {} \; 2>/dev/null > combined_results/special_status_domains_all.txt || touch combined_results/special_status_domains_all.txt
+          
+          # Count results
+          AVAILABLE_COUNT=$(wc -l < combined_results/available_domains_all.txt || echo "0")
+          REGISTERED_COUNT=$(wc -l < combined_results/registered_domains_all.txt || echo "0")
+          SPECIAL_COUNT=$(wc -l < combined_results/special_status_domains_all.txt || echo "0")
+          
+          echo "Results Summary:"
+          echo "Available domains: $AVAILABLE_COUNT"
+          echo "Registered domains: $REGISTERED_COUNT"
+          echo "Special status domains: $SPECIAL_COUNT"
+          
+          # Save summary
+          echo "Batch Scan Results Summary" > combined_results/summary.txt
+          echo "=================================" >> combined_results/summary.txt
+          echo "Base Domain: ${{ needs.prepare.outputs.base_domain }}" >> combined_results/summary.txt
+          echo "Domain Length: ${{ needs.prepare.outputs.domain_length }}" >> combined_results/summary.txt
+          echo "Pattern: ${{ needs.prepare.outputs.pattern }}" >> combined_results/summary.txt
+          echo "Batches: ${{ needs.prepare.outputs.batch_start }} to $(( ${{ needs.prepare.outputs.batch_start }} + ${{ needs.prepare.outputs.batch_size }} - 1))" >> combined_results/summary.txt
+          echo "Available domains: $AVAILABLE_COUNT" >> combined_results/summary.txt
+          echo "Registered domains: $REGISTERED_COUNT" >> combined_results/summary.txt
+          echo "Special status domains: $SPECIAL_COUNT" >> combined_results/summary.txt
+          echo "" >> combined_results/summary.txt
+          echo "Generated at: $(date)" >> combined_results/summary.txt
+      
+      - name: Upload combined results
+        uses: actions/upload-artifact@v4
+        with:
+          name: domain-scan-results-combined
+          path: combined_results/
+      
+      - name: Create summary
+        run: |
+          echo "## Batch Domain Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- Base Domain: ${{ needs.prepare.outputs.base_domain }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Domain Length: ${{ needs.prepare.outputs.domain_length }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Pattern: ${{ needs.prepare.outputs.pattern }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Batches: ${{ needs.prepare.outputs.batch_start }} to $(( ${{ needs.prepare.outputs.batch_start }} + ${{ needs.prepare.outputs.batch_size }} - 1))" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Available domains: $(wc -l < combined_results/available_domains_all.txt)" >> $GITHUB_STEP_SUMMARY
+          echo "- Registered domains: $(wc -l < combined_results/registered_domains_all.txt)" >> $GITHUB_STEP_SUMMARY
+          echo "- Special status domains: $(wc -l < combined_results/special_status_domains_all.txt)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Sample Available Domains" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          head -20 combined_results/available_domains_all.txt 2>/dev/null || echo "No available domains found" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
