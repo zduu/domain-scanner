@@ -1,0 +1,183 @@
+# 域名扫描器正则表达式过滤器样例
+# 使用方法：在 config.toml 的 domain 部分设置 regex_filter 为以下任一模式
+
+# ==============================================
+# 基础过滤器
+# ==============================================
+
+# 开头必须为特定字母
+# 示例：abc.de, def.de, xyz.de
+regex_filter_pattern_start = "^a.*"
+regex_filter_pattern_start2 = "^[abc].*"
+regex_filter_pattern_start3 = "^[aeiou].*"
+
+# 结尾必须为特定字母
+# 示例：cba.de, feda.de, zyxa.de
+regex_filter_pattern_end = ".*a$"
+regex_filter_pattern_end2 = ".*[xyz]$"
+regex_filter_pattern_end3 = ".*[aeiou]$"
+
+# 特定位置的字母
+# 示例：a__d (第一位a，第四位d)
+regex_filter_position = "^a.c.$"
+regex_filter_position2 = "^b..e$"
+regex_filter_position3 = "^c...f$"
+
+# ==============================================
+# 字母模式过滤器
+# ==============================================
+
+# AABB模式 (前两位相同，后两位相同)
+# 示例：aabb.de, ccdd.de, eeff.de
+regex_filter_aabb = "^([a-z])\\1([a-z])\\2$"
+
+# ABAC模式 (第一位和第三位相同，第二位和第四位不同)
+# 示例：abac.de, cbcc.de, fefe.de
+regex_filter_abac = "^([a-z])([a-z])\\1[a-z]$"
+
+# ABCA模式 (第一位和第四位相同，中间两位不同)
+# 示例：abca.de, bccb.de, defd.de
+regex_filter_abca = "^([a-z])([a-z])([a-z])\\1$"
+
+# AABC模式 (前两位相同，后两位不同)
+# 示例：aabc.de, bbbc.de, ccde.de
+regex_filter_aabc = "^([a-z])\\1([a-z])([a-z])$"
+
+# ABAB模式 (第一位和第三位相同，第二位和第四位相同)
+# 示例：abab.de, cdcd.de, efef.de
+regex_filter_abab = "^([a-z])([a-z])\\1\\2$"
+
+# ABBA模式 (第一位和第四位相同，第二位和第三位相同)
+# 示例：abba.de, baab.de, ozzo.de
+regex_filter_abba = "^([a-z])([a-z])\\2\\1$"
+
+# AAAB模式 (前三位相同，第四位不同)
+# 示例：aaab.de, bbcc.de, cccd.de
+regex_filter_aaab = "^([a-z])\\1\\1[a-z]$"
+
+# ABBB模式 (第一位不同，后三位相同)
+# 示例：abbb.de, accc.de, addd.de
+regex_filter_abbb = "^([a-z])([a-z])\\2\\2$"
+
+# ==============================================
+# 字母组合过滤器
+# ==============================================
+
+# 包含特定字母组合
+# 示例：包含 "abc" 的域名
+regex_filter_contains_abc = ".*abc.*"
+
+# 包含连续字母
+# 示例：abcd.de, bcdef.de, 包含连续三个字母
+regex_filter_sequential = "(?:abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)"
+
+# 元音字母开头
+# 示例：abc.de, efg.de, ijk.de
+regex_filter_vowel_start = "^[aeiou].*"
+
+# 辅音字母开头
+# 示例：bcd.de, fgh.de, jkl.de
+regex_filter_consonant_start = "^[bcdfghjklmnpqrstvwxyz].*"
+
+# 元音字母结尾
+# 示例：cba.de, fed.de, kji.de
+regex_filter_vowel_end = ".*[aeiou]$"
+
+# 辅音字母结尾
+# 示例：cbd.de, fhg.de, jlk.de
+regex_filter_consonant_end = ".*[bcdfghjklmnpqrstvwxyz]$"
+
+# ==============================================
+# 回文和对称模式
+# ==============================================
+
+# 3位回文 (正读反读相同)
+# 示例：aba.de, bcb.de, cdc.de
+regex_filter_palindrome3 = "^([a-z])[a-z]\\1$"
+
+# 4位回文 (正读反读相同)
+# 示例：abba.de, baab.de, ozzo.de
+regex_filter_palindrome4 = "^([a-z])([a-z])\\2\\1$"
+
+# 5位回文 (正读反读相同)
+# 示例：abcba.de, bcdcb.de, cdedc.de
+regex_filter_palindrome5 = "^([a-z])([a-z])[a-z]\\2\\1$"
+
+# ==============================================
+# 字母和数字混合过滤器
+# ==============================================
+
+# 数字在特定位置
+# 示例：a1bc.de, ab2d.de, abc3.de
+regex_filter_number_position = "^a.bc$"
+regex_filter_number_position2 = "^ab.c$"
+regex_filter_number_position3 = "^abc.$"
+
+# 特定数字模式
+# 示例：a1a1.de, b2b2.de, c3c3.de
+regex_filter_number_repeat = "^([a-z])([0-9])\\1\\2$"
+
+# 字母数字交替
+# 示例：a1b2.de, c3d4.de, e5f6.de
+regex_filter_alpha_num_alt = "^([a-z])([0-9])([a-z])([0-9])$"
+
+# ==============================================
+# 实用组合过滤器
+# ==============================================
+
+# 仅使用常见易记字母
+# 示例：使用 a, e, i, o, u, b, c, d, g, h, j, k, m, n, p, r, s, t, v, w
+regex_filter_common_letters = "^[aeiou/bcdghjkmnprstvw]{3,4}$"
+
+# 避免容易混淆的字母
+# 示例：避免 l, i, j, o, 0, 1 等易混淆字符
+regex_filter_no_confusing = "^[abcdefghkmnpqrstuvwxyz]{3,4}$"
+
+# SEO友好模式 (包含常见关键词)
+# 示例：包含 pro, tech, web, net, it, ai, io 等关键词
+regex_filter_seo_friendly = ".*(pro|tech|web|net|it|ai|io|app|api|dev|code|data|cloud|byte|bit|cyber|digital|smart|future|next|top|best|first|prime|ultimate).*"
+
+# 品牌友好的域名
+# 示例：简短、易读、易记的域名
+regex_filter_brand_friendly = "^([a-z])\\1([a-z])\\2$|^([a-z])([a-z])\\1\\2$"
+
+# ==============================================
+# 使用示例
+# ==============================================
+
+# 在 config.toml 中使用这些过滤器：
+
+# 方式1：直接修改配置文件
+# [domain]
+# length = 4
+# suffix = ".de"
+# pattern = "D"
+# regex_filter = "^([a-z])\\1([a-z])\\2$"  # 使用AABB模式
+
+# 方式2：命令行参数
+# go run main.go -l 4 -s .de -p D -r "^([a-z])\\1([a-z])\\2$"
+
+# 方式3：结合多个条件
+# go run main.go -l 4 -s .de -p D -r "^([a-z])\\1([a-z])\\2$" -workers 20 -delay 500
+
+# ==============================================
+# 调试和测试建议
+# ==============================================
+
+# 1. 测试正则表达式：可以使用在线正则表达式测试工具
+# 2. 小批量测试：先用较少的域名测试过滤器效果
+# 3. 日志观察：启用详细输出来观察过滤结果
+# 4. 性能优化：复杂的正则表达式可能会影响生成速度
+
+# 示例测试命令（只生成少量域名进行测试）：
+# go run main.go -l 4 -s .de -p D -r "^a.*" -workers 1 -delay 100
+
+# ==============================================
+# 注意事项
+# ==============================================
+
+# 1. 正则表达式必须匹配完整的域名（包含后缀）
+# 2. 反斜杠需要在TOML中转义，因此 \\ 代表一个反斜杠
+# 3. 复杂的正则表达式可能会影响性能
+# 4. 建议先用小规模数据测试过滤效果
+# 5. 确保正则表达式与域名长度匹配

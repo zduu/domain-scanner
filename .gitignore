@@ -19,5 +19,5 @@ go.work
 available_domains_*.txt
 registered_domains_*.txt
 
-
+CLAUDE.md
 .DS_Store

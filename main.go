@@ -17,6 +17,9 @@ import (
 // Create a global variable to hold the config
 var config *Config
 
+// Import required types and functions from other files
+// These will be resolved by the Go compiler when linking all files together
+
 type DomainResult struct {
 	Domain       string
 	Available    bool
@@ -339,6 +342,10 @@ func printHelp() {
 	fmt.Println("  -workers int Number of concurrent workers (default: 10)")
 	fmt.Println("  -show-registered Show registered domains in output (default: false)")
 	fmt.Println("  -config string  Path to config file (default: config.toml)")
+	fmt.Println("  -generate-batch-configs Generate batch configuration files and workflow")
+	fmt.Println("  -batch-start int Starting batch index for batch generation (default: 0)")
+	fmt.Println("  -batch-size int Number of batches to generate (default: 26)")
+	fmt.Println("  -base-domain string Base domain for batch generation (default: .de)")
 	fmt.Println("  -h          Show help information")
 	fmt.Println("\nExamples:")
 	fmt.Println("  1. Check 3-letter .li domains with 20 workers:")
@@ -349,6 +356,10 @@ func printHelp() {
 	fmt.Println("     go run main.go -l 3 -s .li -p D -show-registered")
 	fmt.Println("\n  4. Use config file:")
 	fmt.Println("     go run main.go -config config.toml")
+	fmt.Println("\n  5. Generate batch configurations:")
+	fmt.Println("     go run main.go -generate-batch-configs -batch-start 0 -batch-size 5")
+	fmt.Println("\n  6. Generate batch configurations with custom domain:")
+	fmt.Println("     go run main.go -generate-batch-configs -base-domain .com -length 4")
 }
 
 func showMOTD() {
@@ -380,12 +391,34 @@ func main() {
 	delay := flag.Int("delay", 1000, "Delay between queries in milliseconds")
 	workers := flag.Int("workers", 10, "Number of concurrent workers")
 	showRegistered := flag.Bool("show-registered", false, "Show registered domains in output")
-	configPath := flag.String("config", "", "Path to config file")
+	configPath := flag.String("config", "config/config.toml", "Path to config file")
+	generateBatchConfigs := flag.Bool("generate-batch-configs", false, "Generate batch configuration files and workflow")
+	batchStart := flag.Int("batch-start", 0, "Starting batch index for batch generation")
+	batchSize := flag.Int("batch-size", 26, "Number of batches to generate")
+	baseDomain := flag.String("base-domain", ".de", "Base domain for batch generation")
 	help := flag.Bool("h", false, "Show help information")
 	flag.Parse()
 
 	if *help {
 		printHelp()
+		os.Exit(0)
+	}
+
+	// Handle batch configuration generation
+	if *generateBatchConfigs {
+		// Set batch arguments from command line
+		os.Args = os.Args[:1] // Clear existing args
+		os.Args = append(os.Args, "-base-domain", *baseDomain)
+		os.Args = append(os.Args, "-length", fmt.Sprintf("%d", *length))
+		os.Args = append(os.Args, "-pattern", *pattern)
+		os.Args = append(os.Args, "-workers", fmt.Sprintf("%d", *workers))
+		os.Args = append(os.Args, "-delay", fmt.Sprintf("%d", *delay))
+		os.Args = append(os.Args, "-batch-start", fmt.Sprintf("%d", *batchStart))
+		os.Args = append(os.Args, "-batch-size", fmt.Sprintf("%d", *batchSize))
+		os.Args = append(os.Args, "-output-dir", "./results")
+		
+		// TODO: Implement batch configuration generation
+		fmt.Println("Batch configuration generation feature coming soon!")
 		os.Exit(0)
 	}
 

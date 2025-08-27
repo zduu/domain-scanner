@@ -1,0 +1,26 @@
+# Batch domain scanner configuration for letter "e"
+# Auto-generated for batch processing
+
+[domain]
+length = 4
+suffix = ".de"
+pattern = "D"
+regex_filter = "^e.*"
+
+[scanner]
+delay = 1000
+workers = 10
+show_registered = true
+
+[scanner.methods]
+dns_check = true
+whois_check = true
+ssl_check = true
+http_check = false
+
+[output]
+available_file = "available_domains_batch_e_{pattern}_{length}_{suffix}.txt"
+registered_file = "registered_domains_batch_e_{pattern}_{length}_{suffix}.txt"
+special_status_file = "special_status_domains_batch_e_{pattern}_{length}_{suffix}.txt"
+output_dir = "./results/batch_e"
+verbose = false
