@@ -2,7 +2,6 @@ package domain
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -240,10 +239,7 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		return false, err
 	}
 
-	// Special debugging for dc1.de in GitHub Actions
-	if domain == "dc1.de" && globalConfig != nil && globalConfig.Output.Verbose {
-		fmt.Printf("DEBUG dc1.de: Found signatures: %v\n", signatures)
-	}
+
 
 	// If domain is reserved, it's not available
 	for _, sig := range signatures {
@@ -263,9 +259,6 @@ func CheckDomainAvailability(domain string) (bool, error) {
 
 	// If we have WHOIS signature, domain is registered
 	if hasWHOISSignature {
-		if domain == "dc1.de" && globalConfig != nil && globalConfig.Output.Verbose {
-			fmt.Printf("DEBUG dc1.de: Has WHOIS signature, returning registered\n")
-		}
 		return false, nil
 	}
 

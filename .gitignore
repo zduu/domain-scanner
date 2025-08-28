@@ -23,6 +23,4 @@ CLAUDE.md
 .DS_Store
 <<<<<<< HEAD
 domain-scanner-main/
-=======
-参考可用版本/
->>>>>>> 34544b9fb51dcf562fe4612624b8f884a3b149e1
+config/

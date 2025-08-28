@@ -151,8 +151,8 @@ special_status_file = "special_status_domains_batch_%s_{pattern}_{length}_{suffi
 # Output directory for this batch
 output_dir = "%s"
 
-# Show detailed results in console (enabled for debugging)
-verbose = true
+# Show detailed results in console (disabled for speed)
+verbose = false
 
 # Regex filter explanation:
 # ^%s.* - Matches domains starting with letter "%s"
