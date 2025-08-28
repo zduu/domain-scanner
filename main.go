@@ -189,7 +189,7 @@ func main() {
 			jobs <- domain
 		}
 		totalGenerated = domainCount
-
+		fmt.Printf("Total domains to process: %d\n", domainCount)
 	}()
 
 	// Create a channel for domain status messages
@@ -212,7 +212,15 @@ func main() {
 		for result := range results {
 			processedCount++
 			totalProcessed = processedCount // Update global counter
-			progress := fmt.Sprintf("[%d]", processedCount)
+
+			// Wait for totalGenerated to be set, then show progress
+			var progress string
+			if totalGenerated > 0 {
+				progress = fmt.Sprintf("[%d/%d]", processedCount, totalGenerated)
+			} else {
+				progress = fmt.Sprintf("[%d]", processedCount)
+			}
+
 			if result.Error != nil {
 				statusChan <- fmt.Sprintf("%s Error checking domain %s: %v", progress, result.Domain, result.Error)
 				continue
