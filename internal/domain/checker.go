@@ -2,6 +2,7 @@ package domain
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -239,6 +240,11 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		return false, err
 	}
 
+	// Special logging for dc1.de to debug GitHub Actions issue
+	if domain == "dc1.de" {
+		fmt.Printf("DEBUG dc1.de: Found signatures: %v\n", signatures)
+	}
+
 
 
 	// If domain is reserved, it's not available
@@ -258,12 +264,24 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		}
 	}
 
+	// Special logging for dc1.de
+	if domain == "dc1.de" {
+		fmt.Printf("DEBUG dc1.de: Has registration signatures: %v\n", hasRegistrationSignatures)
+	}
+
 	// If we have clear registration signatures, domain is registered
 	if hasRegistrationSignatures {
+		if domain == "dc1.de" {
+			fmt.Printf("DEBUG dc1.de: Returning REGISTERED due to signatures\n")
+		}
 		return false, nil
 	}
 
 	// If no signatures found, check WHOIS as final verification
+	if domain == "dc1.de" {
+		fmt.Printf("DEBUG dc1.de: No registration signatures, performing WHOIS check\n")
+	}
+
 	maxRetries := 3  // Reduced retry count for speed
 	for i := 0; i < maxRetries; i++ {
 		result, err := whois.Whois(domain)
@@ -271,9 +289,17 @@ func CheckDomainAvailability(domain string) (bool, error) {
 			// Convert WHOIS response to lowercase for case-insensitive matching
 			result = strings.ToLower(result)
 
+			// Special logging for dc1.de
+			if domain == "dc1.de" {
+				fmt.Printf("DEBUG dc1.de: WHOIS response: %s\n", result)
+			}
+
 			// Check for indicators that domain is definitely available
 			for _, indicator := range availableIndicators {
 				if strings.Contains(result, indicator) {
+					if domain == "dc1.de" {
+						fmt.Printf("DEBUG dc1.de: Found AVAILABLE indicator: %s\n", indicator)
+					}
 					return true, nil
 				}
 			}
@@ -306,6 +332,9 @@ func CheckDomainAvailability(domain string) (bool, error) {
 
 			for _, indicator := range enhancedRegisteredIndicators {
 				if strings.Contains(result, indicator) {
+					if domain == "dc1.de" {
+						fmt.Printf("DEBUG dc1.de: Found REGISTERED indicator: %s\n", indicator)
+					}
 					return false, nil
 				}
 			}
@@ -333,6 +362,10 @@ func CheckDomainAvailability(domain string) (bool, error) {
 				}
 			}
 			break
+		} else {
+			if domain == "dc1.de" {
+				fmt.Printf("DEBUG dc1.de: WHOIS attempt %d failed: %v\n", i+1, err)
+			}
 		}
 		if i < maxRetries-1 {
 			// Reduced retry interval for speed
@@ -342,5 +375,8 @@ func CheckDomainAvailability(domain string) (bool, error) {
 	}
 
 	// If we can't determine the status, assume the domain is available
+	if domain == "dc1.de" {
+		fmt.Printf("DEBUG dc1.de: No clear indicators found, returning AVAILABLE\n")
+	}
 	return true, nil
 }
