@@ -159,6 +159,7 @@ func main() {
 	domainChan := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter, regexModeEnum)
 	availableDomains := []string{}
 	registeredDomains := []string{}
+	specialStatusDomains := []string{}
 
 	// Calculate total domains count (base count, may be reduced by regex filter)
 	baseDomainCount := generator.CalculateDomainsCount(*length, *pattern)
@@ -195,9 +196,18 @@ func main() {
 	// Create a channel for domain status messages
 	statusChan := make(chan string, 1000)
 
-	// Start a goroutine to print status messages
+	// Start a goroutine to print status messages and capture special status
 	go func() {
 		for msg := range statusChan {
+			// Check for special status messages
+			if strings.HasPrefix(msg, "SPECIAL STATUS:") {
+				// Extract domain from special status message
+				parts := strings.Split(msg, " ")
+				if len(parts) >= 3 {
+					domain := parts[2]
+					specialStatusDomains = append(specialStatusDomains, domain)
+				}
+			}
 			fmt.Println(msg)
 		}
 	}()
@@ -333,10 +343,48 @@ func main() {
 		}
 	}
 
+	// Save special status domains to file if any exist
+	var specialStatusFile string
+	if len(specialStatusDomains) > 0 {
+		specialStatusFile = fmt.Sprintf("special_status_domains_%s_%d_%s.txt", *pattern, *length, strings.TrimPrefix(*suffix, "."))
+		if appConfig != nil && appConfig.Output.SpecialStatusFile != "" {
+			specialStatusFile = strings.Replace(appConfig.Output.SpecialStatusFile, "{pattern}", *pattern, -1)
+			specialStatusFile = strings.Replace(specialStatusFile, "{length}", fmt.Sprintf("%d", *length), -1)
+			specialStatusFile = strings.Replace(specialStatusFile, "{suffix}", strings.TrimPrefix(*suffix, "."), -1)
+		}
+
+		// Use output directory if specified in config
+		if appConfig != nil && appConfig.Output.OutputDir != "" {
+			specialStatusFile = outputDir + "/" + specialStatusFile
+		}
+
+		specialFile, err := os.Create(specialStatusFile)
+		if err != nil {
+			fmt.Printf("Error creating special status file: %v\n", err)
+		} else {
+			defer func() {
+				if closeErr := specialFile.Close(); closeErr != nil {
+					fmt.Printf("Error closing special status file: %v\n", closeErr)
+				}
+			}()
+
+			for _, domain := range specialStatusDomains {
+				_, err := specialFile.WriteString(domain + "\n")
+				if err != nil {
+					fmt.Printf("Error writing to special status file: %v\n", err)
+					break
+				}
+			}
+		}
+	}
+
 	fmt.Printf("\n\nResults saved to:\n")
 	fmt.Printf("- Available domains: %s\n", availableFile)
 	if *showRegistered {
 		fmt.Printf("- Registered domains: %s\n", registeredFile)
+	}
+	if len(specialStatusDomains) > 0 {
+		fmt.Printf("- Special status domains: %s\n", specialStatusFile)
 	}
 	fmt.Printf("\nSummary:\n")
 	fmt.Printf("- Total domains processed: %d\n", totalProcessed)
@@ -344,7 +392,10 @@ func main() {
 	if *showRegistered {
 		fmt.Printf("- Registered domains: %d\n", len(registeredDomains))
 	} else {
-		registeredCount := totalProcessed - len(availableDomains)
+		registeredCount := totalProcessed - len(availableDomains) - len(specialStatusDomains)
 		fmt.Printf("- Registered domains: %d (not saved to file)\n", registeredCount)
+	}
+	if len(specialStatusDomains) > 0 {
+		fmt.Printf("- Special status domains: %d (require manual review)\n", len(specialStatusDomains))
 	}
 }

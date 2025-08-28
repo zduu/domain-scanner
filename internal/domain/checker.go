@@ -119,17 +119,32 @@ func CheckDomainSignatures(domain string) ([]string, error) {
 	// 2. Check WHOIS information with retry (if enabled)
 	if globalConfig == nil || globalConfig.Scanner.Methods.WHOISCheck {
 		var whoisResult string
-		maxRetries := 3  // Reduced retry count for speed
+		maxRetries := 3
+		baseDelay := 2 * time.Second // Increased base delay
+
 		for i := 0; i < maxRetries; i++ {
+			// Add a small delay before each WHOIS query to avoid rate limiting
+			if i > 0 {
+				waitTime := baseDelay * time.Duration(i+1) // Exponential backoff
+				time.Sleep(waitTime)
+			}
+
 			result, err := whois.Whois(domain)
 			if err == nil {
 				whoisResult = result
 				break
 			}
-			if i < maxRetries-1 {
-				// Reduced retry interval for speed
-				waitTime := time.Duration(1+i) * time.Second
-				time.Sleep(waitTime)
+
+			// Check if this is a rate limit error
+			if strings.Contains(err.Error(), "connection refused") ||
+			   strings.Contains(err.Error(), "access control") ||
+			   strings.Contains(err.Error(), "limit exceeded") ||
+			   strings.Contains(err.Error(), "rate limit") {
+				// For rate limit errors, wait longer before retry
+				if i < maxRetries-1 {
+					waitTime := baseDelay * time.Duration((i+1)*3) // Longer wait for rate limits
+					time.Sleep(waitTime)
+				}
 			}
 		}
 
@@ -291,7 +306,9 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		fmt.Printf("DEBUG dc1.de: No registration signatures, performing WHOIS check (DNS signatures available: %v)\n", hasDNSSignatures)
 	}
 
-	maxRetries := 3  // Reduced retry count for speed
+	maxRetries := 5  // Increased retry count for rate limit handling
+	baseDelay := 2 * time.Second
+
 	for i := 0; i < maxRetries; i++ {
 		result, err := whois.Whois(domain)
 		if err == nil {
@@ -304,20 +321,32 @@ func CheckDomainAvailability(domain string) (bool, error) {
 			}
 
 			// Check for access control errors in WHOIS response
-			if strings.Contains(result, "connection refused") ||
-			   strings.Contains(result, "access control") ||
-			   strings.Contains(result, "limit exceeded") {
+			isRateLimitResponse := strings.Contains(result, "connection refused") ||
+								   strings.Contains(result, "access control") ||
+								   strings.Contains(result, "limit exceeded") ||
+								   strings.Contains(result, "rate limit") ||
+								   strings.Contains(result, "too many requests")
+
+			if isRateLimitResponse {
 				if domain == "dc1.de" {
-					fmt.Printf("DEBUG dc1.de: WHOIS access denied in response, checking DNS signatures\n")
+					fmt.Printf("DEBUG dc1.de: Rate limit detected in WHOIS response\n")
 				}
-				// If WHOIS is blocked but we have DNS signatures, consider it registered
-				if hasDNSSignatures {
+
+				// If this is not the last attempt, wait and retry
+				if i < maxRetries-1 {
+					waitTime := baseDelay * time.Duration(1<<uint(i+1)) // Exponential backoff
 					if domain == "dc1.de" {
-						fmt.Printf("DEBUG dc1.de: Has DNS signatures, returning REGISTERED\n")
+						fmt.Printf("DEBUG dc1.de: Waiting %v before retry due to rate limit response\n", waitTime)
 					}
-					return false, nil
+					time.Sleep(waitTime)
+					continue // Retry the WHOIS query
+				} else {
+					// Last attempt failed, handle specially
+					if domain == "dc1.de" {
+						fmt.Printf("DEBUG dc1.de: All attempts failed due to rate limiting in response\n")
+					}
+					return handleRateLimitedDomain(domain, hasDNSSignatures)
 				}
-				break // Don't continue processing if access is denied
 			}
 
 			// Check for indicators that domain is definitely available
@@ -393,27 +422,41 @@ func CheckDomainAvailability(domain string) (bool, error) {
 				fmt.Printf("DEBUG dc1.de: WHOIS attempt %d failed: %v\n", i+1, err)
 			}
 
-			// Check if this is an access control error
-			if strings.Contains(err.Error(), "connection refused") ||
-			   strings.Contains(err.Error(), "access control") ||
-			   strings.Contains(err.Error(), "limit exceeded") {
+			// Check if this is a rate limit or access control error
+			errorStr := strings.ToLower(err.Error())
+			isRateLimit := strings.Contains(errorStr, "connection refused") ||
+						  strings.Contains(errorStr, "access control") ||
+						  strings.Contains(errorStr, "limit exceeded") ||
+						  strings.Contains(errorStr, "rate limit") ||
+						  strings.Contains(errorStr, "too many requests")
+
+			if isRateLimit {
 				if domain == "dc1.de" {
-					fmt.Printf("DEBUG dc1.de: WHOIS access denied, checking DNS signatures\n")
+					fmt.Printf("DEBUG dc1.de: Rate limit detected, attempt %d/%d\n", i+1, maxRetries)
 				}
-				// If WHOIS is blocked but we have DNS signatures, consider it registered
-				if hasDNSSignatures {
+
+				// If this is the last attempt, handle specially
+				if i == maxRetries-1 {
 					if domain == "dc1.de" {
-						fmt.Printf("DEBUG dc1.de: Has DNS signatures, returning REGISTERED\n")
+						fmt.Printf("DEBUG dc1.de: All WHOIS attempts failed due to rate limiting\n")
 					}
-					return false, nil
+					// Mark domain for special handling
+					return handleRateLimitedDomain(domain, hasDNSSignatures)
 				}
-				break // Don't retry if access is denied
+
+				// Use exponential backoff for rate limits
+				waitTime := baseDelay * time.Duration(1<<uint(i)) // 2s, 4s, 8s, 16s, 32s
+				if domain == "dc1.de" {
+					fmt.Printf("DEBUG dc1.de: Waiting %v before retry due to rate limit\n", waitTime)
+				}
+				time.Sleep(waitTime)
+			} else {
+				// For other errors, use shorter delay
+				if i < maxRetries-1 {
+					waitTime := time.Duration(1+i) * time.Second
+					time.Sleep(waitTime)
+				}
 			}
-		}
-		if i < maxRetries-1 {
-			// Reduced retry interval for speed
-			waitTime := time.Duration(1+i) * time.Second
-			time.Sleep(waitTime)
 		}
 	}
 
@@ -423,4 +466,40 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		fmt.Printf("DEBUG dc1.de: No clear indicators found, returning AVAILABLE (but uncertain due to WHOIS limitations)\n")
 	}
 	return true, nil
+}
+
+// handleRateLimitedDomain handles domains that couldn't be checked due to WHOIS rate limiting
+func handleRateLimitedDomain(domain string, hasDNSSignatures bool) (bool, error) {
+	if domain == "dc1.de" {
+		fmt.Printf("DEBUG dc1.de: Handling rate-limited domain (DNS signatures: %v)\n", hasDNSSignatures)
+	}
+
+	// If we have DNS signatures, it's likely registered
+	if hasDNSSignatures {
+		if domain == "dc1.de" {
+			fmt.Printf("DEBUG dc1.de: Has DNS signatures, considering REGISTERED despite WHOIS rate limit\n")
+		}
+		return false, nil // Domain is registered
+	}
+
+	// No DNS signatures and WHOIS unavailable - this is uncertain
+	// We'll mark it as available but add it to special status for manual review
+	if globalConfig != nil {
+		// Add to special status list for manual review
+		addToSpecialStatus(domain, "WHOIS_RATE_LIMITED")
+	}
+
+	if domain == "dc1.de" {
+		fmt.Printf("DEBUG dc1.de: No DNS signatures, marking as AVAILABLE but adding to special status\n")
+	}
+
+	// Return as available, but it's been flagged for special attention
+	return true, nil
+}
+
+// addToSpecialStatus adds a domain to the special status tracking
+func addToSpecialStatus(domain, reason string) {
+	// This will be handled by the main scanning logic to write to special status file
+	// For now, we'll just log it
+	fmt.Printf("SPECIAL STATUS: %s - %s\n", domain, reason)
 }
