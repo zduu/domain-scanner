@@ -223,7 +223,10 @@ jobs:
           path: ./config/
       
       - name: Create output directory
-        run: mkdir -p ./results/batch_${{ matrix.letter }}
+        run: |
+          BATCH_OUTPUT_DIR="./results/batch_${{ matrix.letter }}"
+          mkdir -p "$BATCH_OUTPUT_DIR"
+          echo "Created output directory: $BATCH_OUTPUT_DIR"
       
       - name: Run domain scanner for batch "${{ matrix.letter }}"
         run: |

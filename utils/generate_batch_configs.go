@@ -158,7 +158,7 @@ verbose = false
 # ^%s.* - Matches domains starting with letter "%s"
 # This reduces the domain space significantly for faster scanning
 # Example for letter 'a': "a.*" matches "ab.de", "abc.de", etc.
-`, letter, domainLength, baseDomain, pattern, letter, regex, letter, letter, batchOutputDir, letter, letter, letter)
+`, letter, domainLength, baseDomain, pattern, letter, regex, letter, letter, letter, batchOutputDir, letter, letter)
 		
 		// Write config file
 		err := os.WriteFile(configPath, []byte(content), 0644)

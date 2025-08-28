@@ -20,7 +20,7 @@ func checkSpecialStatus(whoisResult string) (bool, string) {
 	// 转换为小写以进行不区分大小写的匹配
 	result := strings.ToLower(whoisResult)
 	
-	// 定义特殊状态指示器（包括Connect状态）
+	// 定义特殊状态指示器（不包括Connect状态，因为它表示域名已注册）
 	specialStatusIndicators := map[string]string{
 		"status: redemptionperiod":  "Redemption Period",
 		"status: pendingdelete":     "Pending Delete",
@@ -35,7 +35,7 @@ func checkSpecialStatus(whoisResult string) (bool, string) {
 		"status: autorenewperiod":   "Auto-Renew Period",
 		"status: redemption":        "Redemption Period",  // 另一种写法
 		"status: expire":            "Expired",
-		"status: connect":           "Connected",  // Connect状态表示域名已被注册
+		// 注意：status: connect 不在这里，因为它表示域名已注册而不是特殊状态
 	}
 	
 	// 检查是否存在特殊状态
@@ -71,10 +71,11 @@ func saveSpecialStatusDomainsToFile(config *Config, pattern string, length int, 
 	}
 	
 	// 使用输出目录（如果在配置中指定）
-	if config != nil && config.Output.OutputDir != "" && config.Output.OutputDir != "." {
-		specialStatusFile = config.Output.OutputDir + "/" + specialStatusFile
+	if config != nil && config.Output.OutputDir != "" {
+		outputDir := config.Output.OutputDir
+		specialStatusFile = outputDir + "/" + specialStatusFile
 		// 创建目录如果不存在
-		if err := os.MkdirAll(config.Output.OutputDir, 0755); err != nil {
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
 			return fmt.Errorf("error creating output directory: %v", err)
 		}
 	}
