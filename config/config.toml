@@ -21,27 +21,27 @@ regex_filter = ""
 
 # Scanner behavior configuration
 [scanner]
-# Delay between queries in milliseconds
-delay = 1000
+# Delay between queries in milliseconds (optimized for speed)
+delay = 500
 
-# Number of concurrent workers
-workers = 10
+# Number of concurrent workers (optimized)
+workers = 15
 
 # Show registered domains in output
 show_registered = false
 
-# Detection methods configuration
+# Detection methods configuration (optimized for speed)
 [scanner.methods]
-# Enable DNS record checking
+# Enable DNS record checking - fast
 dns_check = true
 
-# Enable WHOIS checking
+# Enable WHOIS checking - primary method
 whois_check = true
 
-# Enable SSL certificate checking
-ssl_check = true
+# Enable SSL certificate checking - disabled for speed
+ssl_check = false
 
-# Enable HTTP response checking (disabled by default)
+# Enable HTTP response checking - disabled
 http_check = false
 
 # Output configuration
@@ -58,5 +58,5 @@ special_status_file = "special_status_domains_{pattern}_{length}_{suffix}.txt"
 # Output directory for result files
 output_dir = "."
 
-# Show detailed results in console
+# Show detailed results in console (disabled for speed)
 verbose = false

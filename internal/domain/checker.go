@@ -2,7 +2,6 @@ package domain
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -119,23 +118,16 @@ func CheckDomainSignatures(domain string) ([]string, error) {
 	// 2. Check WHOIS information with retry (if enabled)
 	if globalConfig == nil || globalConfig.Scanner.Methods.WHOISCheck {
 		var whoisResult string
-		maxRetries := 5  // Increased retry count
+		maxRetries := 3  // Reduced retry count for speed
 		for i := 0; i < maxRetries; i++ {
-			if globalConfig != nil && globalConfig.Output.Verbose {
-				fmt.Printf("DEBUG: WHOIS attempt %d/%d for %s\n", i+1, maxRetries, domain)
-			}
-			
 			result, err := whois.Whois(domain)
 			if err == nil {
 				whoisResult = result
 				break
 			}
 			if i < maxRetries-1 {
-				// Increased retry interval to avoid rate limiting
-				waitTime := time.Duration(2+i*2) * time.Second
-				if globalConfig != nil && globalConfig.Output.Verbose {
-					fmt.Printf("DEBUG: Waiting %v before retry for %s\n", waitTime, domain)
-				}
+				// Reduced retry interval for speed
+				waitTime := time.Duration(1+i) * time.Second
 				time.Sleep(waitTime)
 			}
 		}
@@ -144,18 +136,10 @@ func CheckDomainSignatures(domain string) ([]string, error) {
 			// Convert WHOIS response to lowercase for case-insensitive matching
 			result := strings.ToLower(whoisResult)
 
-			if globalConfig != nil && globalConfig.Output.Verbose {
-				fmt.Printf("DEBUG: WHOIS response for %s (first 200 chars): %s\n", domain,
-					result[:min(200, len(result))])
-			}
-
 			// First check for available indicators (these take precedence)
 			isAvailable := false
 			for _, indicator := range availableIndicators {
 				if strings.Contains(result, indicator) {
-					if globalConfig != nil && globalConfig.Output.Verbose {
-						fmt.Printf("DEBUG: Found available indicator '%s' for %s\n", indicator, domain)
-					}
 					isAvailable = true
 					break
 				}
@@ -250,21 +234,9 @@ func checkDNSRecords(domain string) ([]string, error) {
 
 // CheckDomainAvailability checks if a domain is available for registration
 func CheckDomainAvailability(domain string) (bool, error) {
-	// Add debug logging
-	if globalConfig != nil && globalConfig.Output.Verbose {
-		fmt.Printf("DEBUG: Checking domain availability for %s\n", domain)
-	}
-
 	signatures, err := CheckDomainSignatures(domain)
 	if err != nil {
-		if globalConfig != nil && globalConfig.Output.Verbose {
-			fmt.Printf("DEBUG: Error getting signatures for %s: %v\n", domain, err)
-		}
 		return false, err
-	}
-
-	if globalConfig != nil && globalConfig.Output.Verbose {
-		fmt.Printf("DEBUG: Found signatures for %s: %v\n", domain, signatures)
 	}
 
 	// If domain is reserved, it's not available
@@ -290,32 +262,16 @@ func CheckDomainAvailability(domain string) (bool, error) {
 	}
 
 	// If no signatures found, check WHOIS as final verification with retry
-	if globalConfig != nil && globalConfig.Output.Verbose {
-		fmt.Printf("DEBUG: No signatures found for %s, performing final WHOIS check\n", domain)
-	}
-
-	maxRetries := 5  // Increased retry count
+	maxRetries := 3  // Reduced retry count for speed
 	for i := 0; i < maxRetries; i++ {
-		if globalConfig != nil && globalConfig.Output.Verbose {
-			fmt.Printf("DEBUG: WHOIS attempt %d/%d for %s\n", i+1, maxRetries, domain)
-		}
-
 		result, err := whois.Whois(domain)
 		if err == nil {
 			// Convert WHOIS response to lowercase for case-insensitive matching
 			result = strings.ToLower(result)
 
-			if globalConfig != nil && globalConfig.Output.Verbose {
-				fmt.Printf("DEBUG: WHOIS response for %s (first 200 chars): %s\n", domain,
-					result[:min(200, len(result))])
-			}
-
 			// Check for indicators that domain is definitely available
 			for _, indicator := range availableIndicators {
 				if strings.Contains(result, indicator) {
-					if globalConfig != nil && globalConfig.Output.Verbose {
-						fmt.Printf("DEBUG: Found available indicator '%s' for %s\n", indicator, domain)
-					}
 					return true, nil
 				}
 			}
@@ -348,9 +304,6 @@ func CheckDomainAvailability(domain string) (bool, error) {
 
 			for _, indicator := range enhancedRegisteredIndicators {
 				if strings.Contains(result, indicator) {
-					if globalConfig != nil && globalConfig.Output.Verbose {
-						fmt.Printf("DEBUG: Found registered indicator '%s' for %s\n", indicator, domain)
-					}
 					return false, nil
 				}
 			}
@@ -378,24 +331,14 @@ func CheckDomainAvailability(domain string) (bool, error) {
 				}
 			}
 			break
-		} else {
-			if globalConfig != nil && globalConfig.Output.Verbose {
-				fmt.Printf("DEBUG: WHOIS attempt %d failed for %s: %v\n", i+1, domain, err)
-			}
 		}
 		if i < maxRetries-1 {
-			// Increased retry interval to avoid rate limiting
-			waitTime := time.Duration(2+i*2) * time.Second
-			if globalConfig != nil && globalConfig.Output.Verbose {
-				fmt.Printf("DEBUG: Waiting %v before retry for %s\n", waitTime, domain)
-			}
+			// Reduced retry interval for speed
+			waitTime := time.Duration(1+i) * time.Second
 			time.Sleep(waitTime)
 		}
 	}
 
 	// If we can't determine the status, assume the domain is available
-	if globalConfig != nil && globalConfig.Output.Verbose {
-		fmt.Printf("DEBUG: Could not determine status for %s, assuming available\n", domain)
-	}
 	return true, nil
 }

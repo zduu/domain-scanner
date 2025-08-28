@@ -189,9 +189,7 @@ func main() {
 			jobs <- domain
 		}
 		totalGenerated = domainCount
-		if appConfig != nil && appConfig.Output.Verbose {
-			fmt.Printf("DEBUG: Total domains generated: %d\n", domainCount)
-		}
+
 	}()
 
 	// Create a channel for domain status messages
@@ -229,12 +227,6 @@ func main() {
 					sigStr := strings.Join(result.Signatures, ", ")
 					statusChan <- fmt.Sprintf("%s Domain %s is REGISTERED [%s]", progress, result.Domain, sigStr)
 					registeredDomains = append(registeredDomains, result.Domain)
-				} else {
-					// Still log for debugging but don't add to array
-					if appConfig != nil && appConfig.Output.Verbose {
-						sigStr := strings.Join(result.Signatures, ", ")
-						statusChan <- fmt.Sprintf("%s Domain %s is REGISTERED [%s] (not shown)", progress, result.Domain, sigStr)
-					}
 				}
 			}
 		}

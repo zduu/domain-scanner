@@ -114,27 +114,27 @@ regex_filter = "%s"
 
 # Scanner behavior configuration
 [scanner]
-# Delay between queries in milliseconds (increased for GitHub Actions)
-delay = 3000
+# Delay between queries in milliseconds (optimized for speed)
+delay = 500
 
-# Number of concurrent workers (reduced for GitHub Actions)
-workers = 5
+# Number of concurrent workers (optimized for GitHub Actions)
+workers = 15
 
 # Show registered domains in output
 show_registered = true
 
-# Enabled detection methods
+# Enabled detection methods (optimized for speed)
 [scanner.methods]
-# Check DNS records (NS, A, MX, TXT, CNAME)
+# Check DNS records (NS, A, MX, TXT, CNAME) - fast
 dns_check = true
 
-# Check WHOIS information
+# Check WHOIS information - primary method
 whois_check = true
 
-# Check SSL certificates
-ssl_check = true
+# Check SSL certificates - disabled for speed
+ssl_check = false
 
-# Check HTTP responses (disabled by default)
+# Check HTTP responses - disabled
 http_check = false
 
 # Output configuration
@@ -151,8 +151,8 @@ special_status_file = "special_status_domains_batch_%s_{pattern}_{length}_{suffi
 # Output directory for this batch
 output_dir = "%s"
 
-# Show detailed results in console (enabled for debugging in GitHub Actions)
-verbose = true
+# Show detailed results in console (disabled for speed)
+verbose = false
 
 # Regex filter explanation:
 # ^%s.* - Matches domains starting with letter "%s"
