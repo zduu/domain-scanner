@@ -256,17 +256,25 @@ func CheckDomainAvailability(domain string) (bool, error) {
 
 	// Check if we have any registration signatures
 	hasRegistrationSignatures := false
+	hasDNSSignatures := false
+	hasWHOISSignature := false
+
 	for _, sig := range signatures {
-		if sig == "DNS_NS" || sig == "DNS_A" || sig == "DNS_MX" || sig == "DNS_TXT" ||
-		   sig == "DNS_CNAME" || sig == "WHOIS" || sig == "SSL" {
+		if sig == "DNS_NS" || sig == "DNS_A" || sig == "DNS_MX" || sig == "DNS_TXT" || sig == "DNS_CNAME" {
+			hasDNSSignatures = true
 			hasRegistrationSignatures = true
-			break
+		} else if sig == "WHOIS" {
+			hasWHOISSignature = true
+			hasRegistrationSignatures = true
+		} else if sig == "SSL" {
+			hasRegistrationSignatures = true
 		}
 	}
 
 	// Special logging for dc1.de
 	if domain == "dc1.de" {
-		fmt.Printf("DEBUG dc1.de: Has registration signatures: %v\n", hasRegistrationSignatures)
+		fmt.Printf("DEBUG dc1.de: Has registration signatures: %v (DNS: %v, WHOIS: %v)\n",
+			hasRegistrationSignatures, hasDNSSignatures, hasWHOISSignature)
 	}
 
 	// If we have clear registration signatures, domain is registered
@@ -278,8 +286,9 @@ func CheckDomainAvailability(domain string) (bool, error) {
 	}
 
 	// If no signatures found, check WHOIS as final verification
+	// But first, let's check if we have any DNS signatures that might indicate registration
 	if domain == "dc1.de" {
-		fmt.Printf("DEBUG dc1.de: No registration signatures, performing WHOIS check\n")
+		fmt.Printf("DEBUG dc1.de: No registration signatures, performing WHOIS check (DNS signatures available: %v)\n", hasDNSSignatures)
 	}
 
 	maxRetries := 3  // Reduced retry count for speed
@@ -292,6 +301,23 @@ func CheckDomainAvailability(domain string) (bool, error) {
 			// Special logging for dc1.de
 			if domain == "dc1.de" {
 				fmt.Printf("DEBUG dc1.de: WHOIS response: %s\n", result)
+			}
+
+			// Check for access control errors in WHOIS response
+			if strings.Contains(result, "connection refused") ||
+			   strings.Contains(result, "access control") ||
+			   strings.Contains(result, "limit exceeded") {
+				if domain == "dc1.de" {
+					fmt.Printf("DEBUG dc1.de: WHOIS access denied in response, checking DNS signatures\n")
+				}
+				// If WHOIS is blocked but we have DNS signatures, consider it registered
+				if hasDNSSignatures {
+					if domain == "dc1.de" {
+						fmt.Printf("DEBUG dc1.de: Has DNS signatures, returning REGISTERED\n")
+					}
+					return false, nil
+				}
+				break // Don't continue processing if access is denied
 			}
 
 			// Check for indicators that domain is definitely available
@@ -366,6 +392,23 @@ func CheckDomainAvailability(domain string) (bool, error) {
 			if domain == "dc1.de" {
 				fmt.Printf("DEBUG dc1.de: WHOIS attempt %d failed: %v\n", i+1, err)
 			}
+
+			// Check if this is an access control error
+			if strings.Contains(err.Error(), "connection refused") ||
+			   strings.Contains(err.Error(), "access control") ||
+			   strings.Contains(err.Error(), "limit exceeded") {
+				if domain == "dc1.de" {
+					fmt.Printf("DEBUG dc1.de: WHOIS access denied, checking DNS signatures\n")
+				}
+				// If WHOIS is blocked but we have DNS signatures, consider it registered
+				if hasDNSSignatures {
+					if domain == "dc1.de" {
+						fmt.Printf("DEBUG dc1.de: Has DNS signatures, returning REGISTERED\n")
+					}
+					return false, nil
+				}
+				break // Don't retry if access is denied
+			}
 		}
 		if i < maxRetries-1 {
 			// Reduced retry interval for speed
@@ -374,9 +417,10 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		}
 	}
 
-	// If we can't determine the status, assume the domain is available
+	// If we can't determine the status, we need to be careful
+	// In GitHub Actions, WHOIS might be blocked, so we can't be sure
 	if domain == "dc1.de" {
-		fmt.Printf("DEBUG dc1.de: No clear indicators found, returning AVAILABLE\n")
+		fmt.Printf("DEBUG dc1.de: No clear indicators found, returning AVAILABLE (but uncertain due to WHOIS limitations)\n")
 	}
 	return true, nil
 }
