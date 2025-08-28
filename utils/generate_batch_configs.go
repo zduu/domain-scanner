@@ -114,11 +114,11 @@ regex_filter = "%s"
 
 # Scanner behavior configuration
 [scanner]
-# Delay between queries in milliseconds
-delay = 1000
+# Delay between queries in milliseconds (increased for GitHub Actions)
+delay = 3000
 
-# Number of concurrent workers
-workers = 10
+# Number of concurrent workers (reduced for GitHub Actions)
+workers = 5
 
 # Show registered domains in output
 show_registered = true
@@ -151,8 +151,8 @@ special_status_file = "special_status_domains_batch_%s_{pattern}_{length}_{suffi
 # Output directory for this batch
 output_dir = "%s"
 
-# Show detailed results in console (false for batch processing)
-verbose = false
+# Show detailed results in console (enabled for debugging in GitHub Actions)
+verbose = true
 
 # Regex filter explanation:
 # ^%s.* - Matches domains starting with letter "%s"

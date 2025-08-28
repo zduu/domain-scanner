@@ -233,11 +233,22 @@ jobs:
           echo "Starting batch scan for domains starting with '${{ matrix.letter }}'"
           echo "Config file: ./config/config_batch_${{ matrix.letter }}.toml"
           echo "Job index: ${{ matrix.index }}"
-          
-          # Run scanner with resource limits
+
+          # Show config file content for debugging
+          echo "=== Config file content ==="
+          cat ./config/config_batch_${{ matrix.letter }}.toml
+          echo "=== End config file ==="
+
+          # Test a known domain first for debugging
+          echo "=== Testing known domain dc1.de ==="
+          echo "dc1.de" > test_domain.txt
+          GOGC=20 go run . -l 3 -s .de -p D -workers 1 -delay 2000 -show-registered < test_domain.txt || true
+
+          # Run scanner with resource limits and increased delays
           # Limit memory usage to prevent runner exhaustion
+          echo "=== Starting main batch scan ==="
           GOGC=20 go run . -config ./config/config_batch_${{ matrix.letter }}.toml
-          
+
           echo "Batch scan completed for '${{ matrix.letter }}'"
       - name: Check disk space
         if: always()

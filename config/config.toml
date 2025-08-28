@@ -1,0 +1,62 @@
+# Domain Scanner Configuration File
+# 域名扫描器配置文件
+
+# Domain generation configuration
+[domain]
+# Domain name length
+length = 3
+
+# Domain suffix (must start with a dot)
+suffix = ".li"
+
+# Domain pattern:
+# d: Pure numbers (e.g., 123.li)
+# D: Pure letters (e.g., abc.li)  
+# a: Alphanumeric (e.g., a1b.li)
+pattern = "D"
+
+# Regex filter for domain names (optional)
+# Example: "^[a-z]{2}[0-9]$" for 2 letters + 1 number
+regex_filter = ""
+
+# Scanner behavior configuration
+[scanner]
+# Delay between queries in milliseconds
+delay = 1000
+
+# Number of concurrent workers
+workers = 10
+
+# Show registered domains in output
+show_registered = false
+
+# Detection methods configuration
+[scanner.methods]
+# Enable DNS record checking
+dns_check = true
+
+# Enable WHOIS checking
+whois_check = true
+
+# Enable SSL certificate checking
+ssl_check = true
+
+# Enable HTTP response checking (disabled by default)
+http_check = false
+
+# Output configuration
+[output]
+# Available domains output file pattern
+available_file = "available_domains_{pattern}_{length}_{suffix}.txt"
+
+# Registered domains output file pattern
+registered_file = "registered_domains_{pattern}_{length}_{suffix}.txt"
+
+# Special status domains output file pattern
+special_status_file = "special_status_domains_{pattern}_{length}_{suffix}.txt"
+
+# Output directory for result files
+output_dir = "."
+
+# Show detailed results in console
+verbose = false

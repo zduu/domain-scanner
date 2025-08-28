@@ -1,332 +1,30 @@
 package main
 
 import (
-	"crypto/tls"
 	"flag"
 	"fmt"
-	"net"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/likexian/whois"
+	"domain-scanner/internal/config"
+	"domain-scanner/internal/domain"
+	"domain-scanner/internal/generator"
+	"domain-scanner/internal/types"
+	"domain-scanner/internal/worker"
 )
 
 // Create a global variable to hold the config
-var config *Config
+var appConfig *types.Config
 
-// Import required types and functions from other files
-// These will be resolved by the Go compiler when linking all files together
 
-type DomainResult struct {
-	Domain       string
-	Available    bool
-	Error        error
-	Signatures   []string
-	SpecialStatus string
-}
 
-func checkDomainSignatures(domain string) ([]string, error) {
-	var signatures []string
 
-	// 1. Check DNS records (if enabled)
-	if config == nil || config.Scanner.Methods.DNSCheck {
-		dnsSignatures, err := checkDNSRecords(domain)
-		if err == nil {
-			signatures = append(signatures, dnsSignatures...)
-		}
-	}
 
-	// 2. Check WHOIS information with retry (if enabled)
-	if config == nil || config.Scanner.Methods.WHOISCheck {
-		var whoisResult string
-		maxRetries := 3
-		for i := 0; i < maxRetries; i++ {
-			result, err := whois.Whois(domain)
-			if err == nil {
-				whoisResult = result
-				break
-			}
-			if i < maxRetries-1 {
-				time.Sleep(time.Second * 2) // Wait 2 seconds before retry
-			}
-		}
 
-		if whoisResult != "" {
-			// Convert WHOIS response to lowercase for case-insensitive matching
-			result := strings.ToLower(whoisResult)
 
-			// Check for registration indicators
-			registeredIndicators := []string{
-				"registrar:",
-				"registrant:",
-				"creation date:",
-				"created:",
-				"updated date:",
-				"updated:",
-				"expiration date:",
-				"expires:",
-				"name server:",
-				"nserver:",
-				"nameserver:",
-				"status: active",
-				"status: client",
-				"status: ok",
-				"status: locked",
-				"status: connect",  // Connect状态被视为已注册状态
-				"domain name:",
-				"domain:",
-			}
 
-			for _, indicator := range registeredIndicators {
-				if strings.Contains(result, indicator) {
-					signatures = append(signatures, "WHOIS")
-					break
-				}
-			}
-
-			// Check for reserved domain indicators
-			reservedIndicators := []string{
-				"status: reserved",
-				"status: restricted",
-				"status: blocked",
-				"status: prohibited",
-				"status: reserved for registry",
-				"status: reserved for registrar",
-				"status: reserved for registry operator",
-				"status: reserved for future use",
-				"status: not available for registration",
-				"status: not available for general registration",
-				"status: reserved for special purposes",
-				"status: reserved for government use",
-				"status: reserved for educational institutions",
-				"status: reserved for non-profit organizations",
-				"domain reserved",
-				"this domain is reserved",
-				"reserved domain",
-			}
-
-			for _, indicator := range reservedIndicators {
-				if strings.Contains(result, indicator) {
-					signatures = append(signatures, "RESERVED")
-					break
-				}
-			}
-		}
-	}
-
-	// 3. Check SSL certificate with timeout (if enabled)
-	if config == nil || config.Scanner.Methods.SSLCheck {
-		conn, err := tls.DialWithDialer(&net.Dialer{
-			Timeout: 5 * time.Second,
-		}, "tcp", domain+":443", &tls.Config{
-			InsecureSkipVerify: true,
-		})
-		if err == nil {
-			defer func() {
-				_ = conn.Close()
-			}()
-			state := conn.ConnectionState()
-			if len(state.PeerCertificates) > 0 {
-				signatures = append(signatures, "SSL")
-			}
-		}
-	}
-
-	return signatures, nil
-}
-
-func checkDomainAvailability(domain string) (bool, error) {
-	signatures, err := checkDomainSignatures(domain)
-	if err != nil {
-		return false, err
-	}
-
-	// If domain is reserved, it's not available
-	for _, sig := range signatures {
-		if sig == "RESERVED" {
-			return false, nil
-		}
-	}
-
-	// If any other signature is found, domain is registered
-	if len(signatures) > 0 {
-		return false, nil
-	}
-
-	// If no signatures found, check WHOIS as final verification with retry
-	maxRetries := 3
-	for i := 0; i < maxRetries; i++ {
-		result, err := whois.Whois(domain)
-		if err == nil {
-			// Convert WHOIS response to lowercase for case-insensitive matching
-			result = strings.ToLower(result)
-
-			// Check for indicators that domain is definitely available
-			availableIndicators := []string{
-				"no match for",
-				"not found",
-				"no data found",
-				"no entries found",
-				"domain not found",
-				"no object found",
-				"no matching record",
-				"status: free",
-				"status: available",
-				"available for registration",
-				"this domain is available",
-				"domain is available",
-				"domain available",
-			}
-
-			for _, indicator := range availableIndicators {
-				if strings.Contains(result, indicator) {
-					return true, nil
-				}
-			}
-			
-			// Check for registration indicators as a secondary check
-			registeredIndicators := []string{
-				"registrar:",
-				"registrant:",
-				"creation date:",
-				"created:",
-				"updated date:",
-				"updated:",
-				"expiration date:",
-				"expires:",
-				"name server:",
-				"nserver:",
-				"nameserver:",
-				"status: active",
-				"status: client",
-				"status: ok",
-				"status: locked",
-				"status: connect",  // Connect状态表示域名已注册
-				"domain name:",
-				"domain:",
-				"Status: connect",
-			}
-			
-			for _, indicator := range registeredIndicators {
-				if strings.Contains(result, indicator) {
-					return false, nil
-				}
-			}
-			
-			// Check for special status indicators
-			specialStatusIndicators := []string{
-				"status: redemptionperiod",
-				"status: pendingdelete",
-				"status: hold",
-				"status: inactive",
-				"status: suspended",
-				"status: reserved",
-				"status: quarantined",
-				"status: pending",
-				"status: transfer",
-				"status: grace",
-				"status: autorenewperiod",
-				"status: redemption",
-				"status: expire",
-			}
-			
-			for _, indicator := range specialStatusIndicators {
-				if strings.Contains(result, indicator) {
-					return false, nil
-				}
-			}
-			break
-		}
-		if i < maxRetries-1 {
-			time.Sleep(time.Second * 2) // Wait 2 seconds before retry
-		}
-	}
-
-	// If we can't determine the status, assume the domain is available
-	return true, nil
-}
-
-func generateDomains(length int, suffix string, pattern string, regexFilter string) []string {
-	var domains []string
-	letters := "abcdefghijklmnopqrstuvwxyz"
-	numbers := "0123456789"
-
-	// Compile regex if provided
-	var regex *regexp.Regexp
-	var err error
-	if regexFilter != "" {
-		regex, err = regexp.Compile(regexFilter)
-		if err != nil {
-			fmt.Printf("Invalid regex pattern: %v\n", err)
-			os.Exit(1)
-		}
-	}
-
-	switch pattern {
-	case "d": // Pure numbers
-		generateCombinations(&domains, "", numbers, length, suffix, regex)
-	case "D": // Pure letters
-		generateCombinations(&domains, "", letters, length, suffix, regex)
-	case "a": // Alphanumeric
-		generateCombinations(&domains, "", letters+numbers, length, suffix, regex)
-	default:
-		fmt.Println("Invalid pattern. Use -d for numbers, -D for letters, -a for alphanumeric")
-		os.Exit(1)
-	}
-
-	return domains
-}
-
-func generateCombinations(domains *[]string, current string, charset string, length int, suffix string, regex *regexp.Regexp) {
-	if len(current) == length {
-		domain := current + suffix
-		// Apply regex filter if provided
-		if regex == nil || regex.MatchString(domain) {
-			*domains = append(*domains, domain)
-		}
-		return
-	}
-
-	for _, c := range charset {
-		generateCombinations(domains, current+string(c), charset, length, suffix, regex)
-	}
-}
-
-func worker(id int, jobs <-chan string, results chan<- DomainResult, delay time.Duration) {
-	for domain := range jobs {
-		available, err := checkDomainAvailability(domain)
-		signatures, errSig := checkDomainSignatures(domain)
-		if errSig != nil {
-			// Log signature check error but continue with domain availability check
-			fmt.Printf("Warning: signature check failed for %s: %v\n", domain, errSig)
-		}
-		
-		// Check for special status
-		specialStatus := ""
-		if !available {
-			// Get WHOIS result to check for special status
-			whoisResult, whoisErr := whois.Whois(domain)
-			if whoisErr == nil {
-				isSpecial, status := checkSpecialStatus(whoisResult)
-				if isSpecial {
-					specialStatus = status
-				}
-			}
-		}
-		
-		results <- DomainResult{
-			Domain:        domain,
-			Available:     available,
-			Error:         err,
-			Signatures:    signatures,
-			SpecialStatus: specialStatus,
-		}
-		time.Sleep(delay)
-	}
-}
 
 func printHelp() {
 	fmt.Println("Domain Scanner - A tool to check domain availability")
@@ -340,14 +38,13 @@ func printHelp() {
 	fmt.Println("              D: Pure letters (e.g., abc.li)")
 	fmt.Println("              a: Alphanumeric (e.g., a1b.li)")
 	fmt.Println("  -r string   Regex filter for domain names")
+	fmt.Println("  -regex-mode string Regex matching mode (default: full)")
+	fmt.Println("    full: Match entire domain name")
+	fmt.Println("    prefix: Match only domain name prefix")
 	fmt.Println("  -delay int  Delay between queries in milliseconds (default: 1000)")
 	fmt.Println("  -workers int Number of concurrent workers (default: 10)")
 	fmt.Println("  -show-registered Show registered domains in output (default: false)")
 	fmt.Println("  -config string  Path to config file (default: config.toml)")
-	fmt.Println("  -generate-batch-configs Generate batch configuration files and workflow")
-	fmt.Println("  -batch-start int Starting batch index for batch generation (default: 0)")
-	fmt.Println("  -batch-size int Number of batches to generate (default: 26)")
-	fmt.Println("  -base-domain string Base domain for batch generation (default: .de)")
 	fmt.Println("  -h          Show help information")
 	fmt.Println("\nExamples:")
 	fmt.Println("  1. Check 3-letter .li domains with 20 workers:")
@@ -358,16 +55,16 @@ func printHelp() {
 	fmt.Println("     go run main.go -l 3 -s .li -p D -show-registered")
 	fmt.Println("\n  4. Use config file:")
 	fmt.Println("     go run main.go -config config.toml")
-	fmt.Println("\n  5. Generate batch configurations:")
-	fmt.Println("     go run main.go -generate-batch-configs -batch-start 0 -batch-size 5")
-	fmt.Println("\n  6. Generate batch configurations with custom domain:")
-	fmt.Println("     go run main.go -generate-batch-configs -base-domain .com -length 4")
+	fmt.Println("\n  5. Use regex filter with full domain matching:")
+	fmt.Println("     go run main.go -l 3 -s .li -p D -r \"^[a-z]{2}[0-9]$\" -regex-mode full")
+	fmt.Println("\n  6. Use regex filter with prefix matching:")
+	fmt.Println("     go run main.go -l 3 -s .li -p D -r \"^[a-z]{2}\" -regex-mode prefix")
 }
 
 func showMOTD() {
 	fmt.Println("\033[1;36m") // Cyan color
 	fmt.Println("╔════════════════════════════════════════════════════════════╗")
-	fmt.Println("║                    Domain Scanner v1.0                     ║")
+	fmt.Println("║                    Domain Scanner v1.3.2                   ║")
 	fmt.Println("║                                                            ║")
 	fmt.Println("║  A powerful tool for checking domain name availability     ║")
 	fmt.Println("║                                                            ║")
@@ -394,11 +91,8 @@ func main() {
 	workers := flag.Int("workers", 10, "Number of concurrent workers")
 	showRegistered := flag.Bool("show-registered", false, "Show registered domains in output")
 	configPath := flag.String("config", "config/config.toml", "Path to config file")
-	generateBatchConfigs := flag.Bool("generate-batch-configs", false, "Generate batch configuration files and workflow")
-	batchStart := flag.Int("batch-start", 0, "Starting batch index for batch generation")
-	batchSize := flag.Int("batch-size", 26, "Number of batches to generate")
-	baseDomain := flag.String("base-domain", ".de", "Base domain for batch generation")
 	help := flag.Bool("h", false, "Show help information")
+	regexMode := flag.String("regex-mode", "full", "Regex match mode: 'full' or 'prefix'")
 	flag.Parse()
 
 	if *help {
@@ -406,43 +100,28 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Handle batch configuration generation
-	if *generateBatchConfigs {
-		// Set batch arguments from command line
-		os.Args = os.Args[:1] // Clear existing args
-		os.Args = append(os.Args, "-base-domain", *baseDomain)
-		os.Args = append(os.Args, "-length", fmt.Sprintf("%d", *length))
-		os.Args = append(os.Args, "-pattern", *pattern)
-		os.Args = append(os.Args, "-workers", fmt.Sprintf("%d", *workers))
-		os.Args = append(os.Args, "-delay", fmt.Sprintf("%d", *delay))
-		os.Args = append(os.Args, "-batch-start", fmt.Sprintf("%d", *batchStart))
-		os.Args = append(os.Args, "-batch-size", fmt.Sprintf("%d", *batchSize))
-		os.Args = append(os.Args, "-output-dir", "./results")
-		
-		// TODO: Implement batch configuration generation
-		fmt.Println("Batch configuration generation feature coming soon!")
-		os.Exit(0)
-	}
-
 	// Load config file if specified
 	if *configPath != "" {
 		var err error
-		config, err = loadConfig(*configPath)
+		appConfig, err = config.LoadConfig(*configPath)
 		if err != nil {
 			fmt.Printf("Error loading config file: %v\n", err)
 			os.Exit(1)
 		}
-		
+
+		// Set global config for domain checker
+		domain.SetConfig(appConfig)
+
 		// Override command line flags with config values
-		*length = config.Domain.Length
-		*suffix = config.Domain.Suffix
-		*pattern = config.Domain.Pattern
-		if config.Domain.RegexFilter != "" {
-			*regexFilter = config.Domain.RegexFilter
+		*length = appConfig.Domain.Length
+		*suffix = appConfig.Domain.Suffix
+		*pattern = appConfig.Domain.Pattern
+		if appConfig.Domain.RegexFilter != "" {
+			*regexFilter = appConfig.Domain.RegexFilter
 		}
-		*delay = config.Scanner.Delay
-		*workers = config.Scanner.Workers
-		*showRegistered = config.Scanner.ShowRegistered
+		*delay = appConfig.Scanner.Delay
+		*workers = appConfig.Scanner.Workers
+		*showRegistered = appConfig.Scanner.ShowRegistered
 	}
 
 	// Ensure suffix starts with a dot
@@ -450,33 +129,48 @@ func main() {
 		*suffix = "." + *suffix
 	}
 
-	domains := generateDomains(*length, *suffix, *pattern, *regexFilter)
+	// Determine regex mode
+	var regexModeEnum types.RegexMode
+	if *regexMode == "full" {
+		regexModeEnum = types.RegexModeFull
+	} else if *regexMode == "prefix" {
+		regexModeEnum = types.RegexModePrefix
+	} else {
+		fmt.Println("Invalid regex-mode. Use 'full' or 'prefix'")
+		os.Exit(1)
+	}
+
+	domainChan := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter, regexModeEnum)
 	availableDomains := []string{}
 	registeredDomains := []string{}
 
+	// Calculate total domains count
+	totalDomains := generator.CalculateDomainsCount(*length, *pattern)
 	fmt.Printf("Checking %d domains with pattern %s and length %d using %d workers...\n",
-		len(domains), *pattern, *length, *workers)
+		totalDomains, *pattern, *length, *workers)
 	if *regexFilter != "" {
 		fmt.Printf("Using regex filter: %s\n", *regexFilter)
 	}
 
 	// Create channels for jobs and results
-	jobs := make(chan string, len(domains))
-	results := make(chan DomainResult, len(domains))
+	jobs := make(chan string, 1000)
+	results := make(chan types.DomainResult, 1000)
 
 	// Start workers
 	for w := 1; w <= *workers; w++ {
-		go worker(w, jobs, results, time.Duration(*delay)*time.Millisecond)
+		go worker.Worker(w, jobs, results, time.Duration(*delay)*time.Millisecond)
 	}
 
-	// Send jobs
-	for _, domain := range domains {
-		jobs <- domain
-	}
-	close(jobs)
+	// Send jobs from domain generator
+	go func() {
+		defer close(jobs)
+		for domain := range domainChan {
+			jobs <- domain
+		}
+	}()
 
 	// Create a channel for domain status messages
-	statusChan := make(chan string, len(domains))
+	statusChan := make(chan string, 1000)
 
 	// Start a goroutine to print status messages
 	go func() {
@@ -490,19 +184,16 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < len(domains); i++ {
-			result := <-results
-			progress := fmt.Sprintf("[%d/%d]", i+1, len(domains))
+		processedCount := 0
+		for result := range results {
+			processedCount++
+			progress := fmt.Sprintf("[%d/%d]", processedCount, totalDomains)
 			if result.Error != nil {
 				statusChan <- fmt.Sprintf("%s Error checking domain %s: %v", progress, result.Domain, result.Error)
 				continue
 			}
 
-			// Handle special status domains
-			if result.SpecialStatus != "" {
-				statusChan <- fmt.Sprintf("%s Domain %s is in SPECIAL STATUS [%s]", progress, result.Domain, result.SpecialStatus)
-				addSpecialStatusDomain(result.Domain, result.SpecialStatus)
-			} else if result.Available {
+			if result.Available {
 				statusChan <- fmt.Sprintf("%s Domain %s is AVAILABLE!", progress, result.Domain)
 				availableDomains = append(availableDomains, result.Domain)
 			} else if *showRegistered {
@@ -510,23 +201,40 @@ func main() {
 				statusChan <- fmt.Sprintf("%s Domain %s is REGISTERED [%s]", progress, result.Domain, sigStr)
 				registeredDomains = append(registeredDomains, result.Domain)
 			}
+
+			// Check if all domains have been processed
+			if processedCount >= totalDomains {
+				break
+			}
 		}
 		close(statusChan)
 	}()
+
+	// Monitor task completion
+	go func() {
+		// Wait for all domains to be generated
+		for range domainChan {
+			// domainChan closes when generation is complete
+		}
+		// Wait a bit to ensure all results are processed
+		time.Sleep(1 * time.Second)
+		close(results)
+	}()
+
 	wg.Wait()
 
 	// Save available domains to file
 	availableFile := fmt.Sprintf("available_domains_%s_%d_%s.txt", *pattern, *length, strings.TrimPrefix(*suffix, "."))
-	if config != nil && config.Output.AvailableFile != "" {
-		availableFile = strings.Replace(config.Output.AvailableFile, "{pattern}", *pattern, -1)
+	if appConfig != nil && appConfig.Output.AvailableFile != "" {
+		availableFile = strings.Replace(appConfig.Output.AvailableFile, "{pattern}", *pattern, -1)
 		availableFile = strings.Replace(availableFile, "{length}", fmt.Sprintf("%d", *length), -1)
 		availableFile = strings.Replace(availableFile, "{suffix}", strings.TrimPrefix(*suffix, "."), -1)
 	}
-	
+
 	// Create output directory if specified in config
 	outputDir := "."
-	if config != nil && config.Output.OutputDir != "" {
-		outputDir = config.Output.OutputDir
+	if appConfig != nil && appConfig.Output.OutputDir != "" {
+		outputDir = appConfig.Output.OutputDir
 		// Always create directory if it doesn't exist, even if it's "."
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
 			fmt.Printf("Error creating output directory: %v\n", err)
@@ -534,15 +242,13 @@ func main() {
 		}
 		availableFile = outputDir + "/" + availableFile
 	}
-	
+
 	file, err := os.Create(availableFile)
 	if err != nil {
 		fmt.Printf("Error creating output file: %v\n", err)
 		os.Exit(1)
 	}
-	defer func() {
-		_ = file.Close()
-	}()
+	defer file.Close()
 
 	for _, domain := range availableDomains {
 		_, err := file.WriteString(domain + "\n")
@@ -555,25 +261,23 @@ func main() {
 	// Save registered domains to file only if show-registered is true
 	registeredFile := fmt.Sprintf("registered_domains_%s_%d_%s.txt", *pattern, *length, strings.TrimPrefix(*suffix, "."))
 	if *showRegistered {
-		if config != nil && config.Output.RegisteredFile != "" {
-			registeredFile = strings.Replace(config.Output.RegisteredFile, "{pattern}", *pattern, -1)
+		if appConfig != nil && appConfig.Output.RegisteredFile != "" {
+			registeredFile = strings.Replace(appConfig.Output.RegisteredFile, "{pattern}", *pattern, -1)
 			registeredFile = strings.Replace(registeredFile, "{length}", fmt.Sprintf("%d", *length), -1)
 			registeredFile = strings.Replace(registeredFile, "{suffix}", strings.TrimPrefix(*suffix, "."), -1)
 		}
-		
+
 		// Use output directory if specified in config
-		if config != nil && config.Output.OutputDir != "" {
+		if appConfig != nil && appConfig.Output.OutputDir != "" {
 			registeredFile = outputDir + "/" + registeredFile
 		}
-		
+
 		regFile, err := os.Create(registeredFile)
 		if err != nil {
 			fmt.Printf("Error creating registered domains file: %v\n", err)
 			os.Exit(1)
 		}
-		defer func() {
-			_ = regFile.Close()
-		}()
+		defer regFile.Close()
 
 		for _, domain := range registeredDomains {
 			_, err := regFile.WriteString(domain + "\n")
@@ -583,41 +287,16 @@ func main() {
 			}
 		}
 	}
-	
-	// Save special status domains to file
-	err = saveSpecialStatusDomainsToFile(config, *pattern, *length, *suffix)
-	if err != nil {
-		fmt.Printf("Error saving special status domains: %v\n", err)
-		os.Exit(1)
-	}
 
 	fmt.Printf("\n\nResults saved to:\n")
 	fmt.Printf("- Available domains: %s\n", availableFile)
 	if *showRegistered {
 		fmt.Printf("- Registered domains: %s\n", registeredFile)
 	}
-	if len(SpecialStatusDomains) > 0 {
-		// Print special status domains file path
-		specialStatusFile := fmt.Sprintf("special_status_domains_%s_%d_%s.txt", *pattern, *length, strings.TrimPrefix(*suffix, "."))
-		if config != nil && config.Output.SpecialStatusFile != "" {
-			specialStatusFile = strings.Replace(config.Output.SpecialStatusFile, "{pattern}", *pattern, -1)
-			specialStatusFile = strings.Replace(specialStatusFile, "{length}", fmt.Sprintf("%d", *length), -1)
-			specialStatusFile = strings.Replace(specialStatusFile, "{suffix}", strings.TrimPrefix(*suffix, "."), -1)
-		}
-		
-		// Use output directory if specified in config
-		if config != nil && config.Output.OutputDir != "" {
-			specialStatusFile = outputDir + "/" + specialStatusFile
-		}
-		fmt.Printf("- Special status domains: %s\n", specialStatusFile)
-	}
 	fmt.Printf("\nSummary:\n")
-	fmt.Printf("- Total domains checked: %d\n", len(domains))
+	fmt.Printf("- Total domains checked: %d\n", totalDomains)
 	fmt.Printf("- Available domains: %d\n", len(availableDomains))
 	if *showRegistered {
 		fmt.Printf("- Registered domains: %d\n", len(registeredDomains))
-	}
-	if len(SpecialStatusDomains) > 0 {
-		fmt.Printf("- Special status domains: %d\n", len(SpecialStatusDomains))
 	}
 }

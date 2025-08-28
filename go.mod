@@ -4,6 +4,7 @@ go 1.22
 
 require (
 	github.com/BurntSushi/toml v1.5.0
+	github.com/dlclark/regexp2 v1.11.4
 	github.com/likexian/whois v1.15.6
 )
 

@@ -2,11 +2,107 @@
 
 一个强大的域名可用性检查工具，使用 Go 语言编写。
 
+## 项目来源
+
+本项目基于 [https://github.com/xuemian168/domain-scanner](https://github.com/xuemian168/domain-scanner) 进行修改和优化。
+
+### 原项目致谢
+
+感谢原作者 [xuemian168](https://github.com/xuemian168) 提供的优秀基础代码。本项目在原有功能基础上进行了架构重构和功能增强，保持了与原项目的兼容性。
+
+### 更新日志
+
+#### v1.3.2 (2025-01-28)
+- 🏗️ **架构重构**: 采用模块化设计，代码组织更清晰
+- 🎯 **检测准确性提升**: 特别优化了.de域名的WHOIS检测
+- 🔄 **重试机制改进**: 增加重试次数和智能等待，提高GitHub Actions稳定性
+- 📊 **调试功能增强**: 新增详细的verbose模式日志
+- ⚡ **性能优化**: 流式域名生成，降低内存占用
+- 🛡️ **安全性提升**: 正则表达式ReDoS防护
+- 📦 **二进制文件更新**: 重新编译，包含所有最新改进
+
+### 主要改进
+
+- 🏗️ **模块化架构重构**：采用清晰的 `internal/` 包结构，提高代码可维护性
+- 🎯 **增强域名检测准确性**：优化WHOIS解析，特别针对DENIC (.de域名) 的检测
+- 🔄 **改进重试机制**：增加重试次数和智能等待时间，提高GitHub Actions环境稳定性
+- 📊 **详细调试日志**：在verbose模式下提供完整的检测过程信息
+- ⚡ **流式域名生成**：优化内存使用，支持大规模域名扫描
+- 🛡️ **正则表达式安全**：防止ReDoS攻击，支持超时保护
+- 🔧 **GitHub Actions优化**：调整并发参数，提高云环境检测准确性
+
+### 版本信息
+
+- **当前版本**: v1.3.2 (2025-01-28)
+- **Go版本要求**: 1.22+
+- **架构**: 模块化设计，支持跨平台编译
+- **二进制文件**: 已更新至最新版本，包含所有架构改进
+
 ## 快速开始
 
-### 使用预编译二进制文件
+### 方式一：使用预编译二进制文件
+
+项目根目录包含最新编译的二进制文件 `domain-scanner`（适用于当前平台）：
+
 ```bash
+# 直接使用当前平台的二进制文件
 ./domain-scanner [选项]
+
+# 查看帮助信息
+./domain-scanner -h
+
+# 示例：扫描3位.de域名
+./domain-scanner -l 3 -s .de -p D -workers 5
+```
+
+如需其他平台的二进制文件，可以使用下面的跨平台编译方法。
+
+### 方式二：从源码编译
+
+#### 环境要求
+- Go 1.22 或更高版本
+- Git
+
+#### 编译步骤
+
+```bash
+# 克隆项目
+git clone https://github.com/your-username/domain-scanner.git
+cd domain-scanner
+
+# 安装依赖
+go mod tidy
+
+# 编译当前平台版本
+go build -o domain-scanner .
+
+# 或编译所有平台版本
+make build-all
+
+# 运行
+./domain-scanner [选项]
+```
+
+#### 跨平台编译
+
+```bash
+# Linux x64
+GOOS=linux GOARCH=amd64 go build -o domain-scanner-linux-amd64 .
+
+# Windows x64
+GOOS=windows GOARCH=amd64 go build -o domain-scanner-windows-amd64.exe .
+
+# macOS x64
+GOOS=darwin GOARCH=amd64 go build -o domain-scanner-darwin-amd64 .
+
+# macOS ARM64
+GOOS=darwin GOARCH=arm64 go build -o domain-scanner-darwin-arm64 .
+```
+
+### 方式三：直接运行源码
+
+```bash
+go run main.go [选项]
 ```
 
 ### 配置文件结构
