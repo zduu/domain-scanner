@@ -116,6 +116,10 @@ on:
           - 'd'  # Digits
           - 'a'  # Alphanumeric
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   prepare:
     runs-on: ubuntu-latest

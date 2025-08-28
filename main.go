@@ -144,12 +144,14 @@ func main() {
 	availableDomains := []string{}
 	registeredDomains := []string{}
 
-	// Calculate total domains count
-	totalDomains := generator.CalculateDomainsCount(*length, *pattern)
-	fmt.Printf("Checking %d domains with pattern %s and length %d using %d workers...\n",
-		totalDomains, *pattern, *length, *workers)
+	// Calculate total domains count (base count, may be reduced by regex filter)
+	baseDomainCount := generator.CalculateDomainsCount(*length, *pattern)
+	fmt.Printf("Checking domains with pattern %s and length %d using %d workers...\n",
+		*pattern, *length, *workers)
 	if *regexFilter != "" {
-		fmt.Printf("Using regex filter: %s\n", *regexFilter)
+		fmt.Printf("Using regex filter: %s (base count: %d domains)\n", *regexFilter, baseDomainCount)
+	} else {
+		fmt.Printf("Total domains to check: %d\n", baseDomainCount)
 	}
 
 	// Create channels for jobs and results
@@ -187,7 +189,7 @@ func main() {
 		processedCount := 0
 		for result := range results {
 			processedCount++
-			progress := fmt.Sprintf("[%d/%d]", processedCount, totalDomains)
+			progress := fmt.Sprintf("[%d]", processedCount)
 			if result.Error != nil {
 				statusChan <- fmt.Sprintf("%s Error checking domain %s: %v", progress, result.Domain, result.Error)
 				continue
@@ -201,23 +203,18 @@ func main() {
 				statusChan <- fmt.Sprintf("%s Domain %s is REGISTERED [%s]", progress, result.Domain, sigStr)
 				registeredDomains = append(registeredDomains, result.Domain)
 			}
-
-			// Check if all domains have been processed
-			if processedCount >= totalDomains {
-				break
-			}
 		}
 		close(statusChan)
 	}()
 
 	// Monitor task completion
 	go func() {
-		// Wait for all domains to be generated
+		// Wait for all domains to be generated and processed
 		for range domainChan {
 			// domainChan closes when generation is complete
 		}
-		// Wait a bit to ensure all results are processed
-		time.Sleep(1 * time.Second)
+		// Wait for all workers to finish processing
+		time.Sleep(2 * time.Second)
 		close(results)
 	}()
 
@@ -302,7 +299,8 @@ func main() {
 		fmt.Printf("- Registered domains: %s\n", registeredFile)
 	}
 	fmt.Printf("\nSummary:\n")
-	fmt.Printf("- Total domains checked: %d\n", totalDomains)
+	totalProcessed := len(availableDomains) + len(registeredDomains)
+	fmt.Printf("- Total domains processed: %d\n", totalProcessed)
 	fmt.Printf("- Available domains: %d\n", len(availableDomains))
 	if *showRegistered {
 		fmt.Printf("- Registered domains: %d\n", len(registeredDomains))

@@ -8,6 +8,10 @@ on:
         required: false
         default: 'config.toml'
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   build:
     runs-on: ubuntu-latest

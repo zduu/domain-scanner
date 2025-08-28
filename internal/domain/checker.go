@@ -145,23 +145,38 @@ func CheckDomainSignatures(domain string) ([]string, error) {
 			result := strings.ToLower(whoisResult)
 
 			if globalConfig != nil && globalConfig.Output.Verbose {
-				fmt.Printf("DEBUG: WHOIS response for %s (first 200 chars): %s\n", domain, 
+				fmt.Printf("DEBUG: WHOIS response for %s (first 200 chars): %s\n", domain,
 					result[:min(200, len(result))])
 			}
 
-			// Enhanced registration status detection
-			for _, indicator := range registeredIndicators {
+			// First check for available indicators (these take precedence)
+			isAvailable := false
+			for _, indicator := range availableIndicators {
 				if strings.Contains(result, indicator) {
-					signatures = append(signatures, "WHOIS")
+					if globalConfig != nil && globalConfig.Output.Verbose {
+						fmt.Printf("DEBUG: Found available indicator '%s' for %s\n", indicator, domain)
+					}
+					isAvailable = true
 					break
 				}
 			}
 
-			// Check for reserved domain indicators
-			for _, indicator := range reservedIndicators {
-				if strings.Contains(result, indicator) {
-					signatures = append(signatures, "RESERVED")
-					break
+			// Only check for registration if not explicitly available
+			if !isAvailable {
+				// Enhanced registration status detection
+				for _, indicator := range registeredIndicators {
+					if strings.Contains(result, indicator) {
+						signatures = append(signatures, "WHOIS")
+						break
+					}
+				}
+
+				// Check for reserved domain indicators
+				for _, indicator := range reservedIndicators {
+					if strings.Contains(result, indicator) {
+						signatures = append(signatures, "RESERVED")
+						break
+					}
 				}
 			}
 		}
@@ -259,8 +274,18 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		}
 	}
 
-	// If any other signature is found, domain is registered
-	if len(signatures) > 0 {
+	// Check if we have registration signatures (DNS, WHOIS, SSL)
+	// These indicate the domain is registered
+	hasRegistrationSignatures := false
+	for _, sig := range signatures {
+		if sig == "DNS_NS" || sig == "DNS_A" || sig == "DNS_MX" || sig == "DNS_TXT" ||
+		   sig == "DNS_CNAME" || sig == "WHOIS" || sig == "SSL" {
+			hasRegistrationSignatures = true
+			break
+		}
+	}
+
+	if hasRegistrationSignatures {
 		return false, nil
 	}
 
