@@ -213,13 +213,8 @@ func main() {
 			processedCount++
 			totalProcessed = processedCount // Update global counter
 
-			// Wait for totalGenerated to be set, then show progress
-			var progress string
-			if totalGenerated > 0 {
-				progress = fmt.Sprintf("[%d/%d]", processedCount, totalGenerated)
-			} else {
-				progress = fmt.Sprintf("[%d]", processedCount)
-			}
+			// Show progress with current count, will be updated when total is known
+			progress := fmt.Sprintf("[%d]", processedCount)
 
 			if result.Error != nil {
 				statusChan <- fmt.Sprintf("%s Error checking domain %s: %v", progress, result.Domain, result.Error)

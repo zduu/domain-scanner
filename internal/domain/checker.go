@@ -2,6 +2,7 @@ package domain
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -239,6 +240,11 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		return false, err
 	}
 
+	// Special debugging for dc1.de in GitHub Actions
+	if domain == "dc1.de" && globalConfig != nil && globalConfig.Output.Verbose {
+		fmt.Printf("DEBUG dc1.de: Found signatures: %v\n", signatures)
+	}
+
 	// If domain is reserved, it's not available
 	for _, sig := range signatures {
 		if sig == "RESERVED" {
@@ -246,22 +252,36 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		}
 	}
 
-	// Check if we have registration signatures (DNS, WHOIS, SSL)
-	// These indicate the domain is registered
-	hasRegistrationSignatures := false
+	// Check if we have WHOIS signature indicating registration
+	hasWHOISSignature := false
 	for _, sig := range signatures {
-		if sig == "DNS_NS" || sig == "DNS_A" || sig == "DNS_MX" || sig == "DNS_TXT" ||
-		   sig == "DNS_CNAME" || sig == "WHOIS" || sig == "SSL" {
-			hasRegistrationSignatures = true
+		if sig == "WHOIS" {
+			hasWHOISSignature = true
 			break
 		}
 	}
 
-	if hasRegistrationSignatures {
+	// If we have WHOIS signature, domain is registered
+	if hasWHOISSignature {
+		if domain == "dc1.de" && globalConfig != nil && globalConfig.Output.Verbose {
+			fmt.Printf("DEBUG dc1.de: Has WHOIS signature, returning registered\n")
+		}
 		return false, nil
 	}
 
-	// If no signatures found, check WHOIS as final verification with retry
+	// Check if we have other registration signatures (DNS, SSL)
+	// But these are less reliable, so we'll do additional WHOIS check
+	hasOtherSignatures := false
+	for _, sig := range signatures {
+		if sig == "DNS_NS" || sig == "DNS_A" || sig == "DNS_MX" || sig == "DNS_TXT" ||
+		   sig == "DNS_CNAME" || sig == "SSL" {
+			hasOtherSignatures = true
+			break
+		}
+	}
+
+	// Perform WHOIS check for final verification
+	// This is especially important if we have other signatures but no WHOIS signature
 	maxRetries := 3  // Reduced retry count for speed
 	for i := 0; i < maxRetries; i++ {
 		result, err := whois.Whois(domain)
@@ -339,6 +359,11 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		}
 	}
 
-	// If we can't determine the status, assume the domain is available
+	// If we have other signatures but WHOIS is inconclusive, consider it registered
+	if hasOtherSignatures {
+		return false, nil
+	}
+
+	// If we can't determine the status and have no signatures, assume available
 	return true, nil
 }
