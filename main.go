@@ -204,8 +204,10 @@ func checkDomainAvailability(domain string) (bool, error) {
 				"status: client",
 				"status: ok",
 				"status: locked",
+				"status: connect",  // Connect状态表示域名已注册
 				"domain name:",
 				"domain:",
+				"Status: connect",
 			}
 			
 			for _, indicator := range registeredIndicators {
@@ -522,13 +524,15 @@ func main() {
 	}
 	
 	// Create output directory if specified in config
-	if config != nil && config.Output.OutputDir != "" && config.Output.OutputDir != "." {
-		availableFile = config.Output.OutputDir + "/" + availableFile
-		// Create directory if it doesn't exist
-		if err := os.MkdirAll(config.Output.OutputDir, 0755); err != nil {
+	outputDir := "."
+	if config != nil && config.Output.OutputDir != "" {
+		outputDir = config.Output.OutputDir
+		// Always create directory if it doesn't exist, even if it's "."
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
 			fmt.Printf("Error creating output directory: %v\n", err)
 			os.Exit(1)
 		}
+		availableFile = outputDir + "/" + availableFile
 	}
 	
 	file, err := os.Create(availableFile)
@@ -558,8 +562,8 @@ func main() {
 		}
 		
 		// Use output directory if specified in config
-		if config != nil && config.Output.OutputDir != "" && config.Output.OutputDir != "." {
-			registeredFile = config.Output.OutputDir + "/" + registeredFile
+		if config != nil && config.Output.OutputDir != "" {
+			registeredFile = outputDir + "/" + registeredFile
 		}
 		
 		regFile, err := os.Create(registeredFile)
@@ -602,8 +606,8 @@ func main() {
 		}
 		
 		// Use output directory if specified in config
-		if config != nil && config.Output.OutputDir != "" && config.Output.OutputDir != "." {
-			specialStatusFile = config.Output.OutputDir + "/" + specialStatusFile
+		if config != nil && config.Output.OutputDir != "" {
+			specialStatusFile = outputDir + "/" + specialStatusFile
 		}
 		fmt.Printf("- Special status domains: %s\n", specialStatusFile)
 	}

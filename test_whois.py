@@ -35,7 +35,7 @@ def query_domain(domain):
             print(f"系统 whois 命令也失败了: {e2}")
 
 if __name__ == "__main__":
-    domain = "dc1.de"
+    domain = "bun.de"
     if len(sys.argv) > 1:
         domain = sys.argv[1]
     
