@@ -75,6 +75,7 @@ func checkDomainSignatures(domain string) ([]string, error) {
 				"status: client",
 				"status: ok",
 				"status: locked",
+				"status: connect",  // Connect状态被视为已注册状态
 				"domain name:",
 				"domain:",
 			}
