@@ -67,6 +67,22 @@ on:
           - 24
           - 25
           - 26
+      max_parallel:
+        description: 'Maximum number of concurrent jobs (1-10)'
+        required: false
+        default: '5'
+        type: choice
+        options:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
       base_domain:
         description: 'Domain suffix to scan'
         required: false
@@ -110,6 +126,7 @@ jobs:
       domain_length: ${{ steps.set-outputs.outputs.domain_length }}
       pattern: ${{ steps.set-outputs.outputs.pattern }}
       job_matrix: ${{ steps.set-outputs.outputs.job_matrix }}
+      max_parallel: ${{ steps.set-outputs.outputs.max_parallel }}
     steps:
       - uses: actions/checkout@v4
       
@@ -133,126 +150,40 @@ jobs:
           echo "Domain length: $DOMAIN_LENGTH"
           echo "Pattern: $PATTERN"
           
-          # Generate batch configurations (modified script)
-          cat > generate_batch_configs.go << 'EOF'
-          package main
+          # Create config directory if it doesn't exist
+          mkdir -p ./config
           
-          import (
-              "fmt"
-              "os"
-              "strconv"
-          )
+          # Run the config generation tool with parameters (using Go run to avoid platform issues)
+          go run utils/generate_batch_configs.go -batch-start $BATCH_START -batch-size $BATCH_SIZE -base-domain $BASE_DOMAIN -domain-length $DOMAIN_LENGTH -pattern $PATTERN
           
-          func main() {
-              // Parse command line arguments
-              args := os.Args[1:]
-              batchStart := 0
-              batchSize := 26
-              baseDomain := ".de"
-              domainLength := 4
-              pattern := "D"
-              
-              for i := 0; i < len(args); i += 2 {
-                  if i+1 >= len(args) {
-                      break
-                  }
-                  switch args[i] {
-                  case "-batch-start":
-                      if val, err := strconv.Atoi(args[i+1]); err == nil {
-                          batchStart = val
-                      }
-                  case "-batch-size":
-                      if val, err := strconv.Atoi(args[i+1]); err == nil {
-                          batchSize = val
-                      }
-                  case "-base-domain":
-                      baseDomain = args[i+1]
-                  case "-domain-length":
-                      if val, err := strconv.Atoi(args[i+1]); err == nil {
-                          domainLength = val
-                      }
-                  case "-pattern":
-                      pattern = args[i+1]
-                  }
-              }
-              
-              // Generate configurations
-              letters := "abcdefghijklmnopqrstuvwxyz"
-              startIdx := batchStart
-              endIdx := batchStart + batchSize
-              
-              if endIdx > len(letters) {
-                  endIdx = len(letters)
-              }
-              
-              for i := startIdx; i < endIdx; i++ {
-                  letter := string(letters[i])
-                  configPath := fmt.Sprintf("config_batch_%s.toml", letter)
-                  outputDir := fmt.Sprintf("./results/batch_%s", letter)
-                  regex := fmt.Sprintf("^%s.*", letter)
-                  
-                  content := fmt.Sprintf(`# Batch domain scanner configuration for letter "%%s"
-          # Auto-generated for batch processing
-          
-          [domain]
-          length = %%d
-          suffix = "%%s"
-          pattern = "%%s"
-          regex_filter = "%%s"
-          
-          [scanner]
-          delay = 2000
-          workers = 5
-          show_registered = true
-          
-          [scanner.methods]
-          dns_check = true
-          whois_check = true
-          ssl_check = true
-          http_check = false
-          
-          [output]
-          available_file = "available_domains_batch_%%s_{pattern}_{length}_{suffix}.txt"
-          registered_file = "registered_domains_batch_%%s_{pattern}_{length}_{suffix}.txt"
-          special_status_file = "special_status_domains_batch_%%s_{pattern}_{length}_{suffix}.txt"
-          output_dir = "%%s"
-          verbose = false
-          `, letter, domainLength, baseDomain, pattern, regex, letter, letter, letter, letter, outputDir)
-                  
-                  // Write config file
-                  err := os.WriteFile(configPath, []byte(content), 0644)
-                  if err != nil {
-                      fmt.Printf("Error writing config file %%s: %%v\n", configPath, err)
-                      continue
-                  }
-                  
-                  fmt.Printf("Generated: %%s\n", configPath)
-              }
-              
-              fmt.Println("Batch configuration generation completed!")
-          }
-          EOF
-          
-          # Config directory already exists
-          echo "Using existing config directory: ./config"
-          
-          # List existing config files for verification
-          echo "Available config files:"
+          # List generated config files for verification
+          echo "Generated config files:"
           ls -la ./config/
-          
-          echo "Generated configurations for batches $BATCH_START to $((BATCH_START + BATCH_SIZE - 1))"
+      
+      - name: Upload config files as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: batch-configs
+          path: ./config/
       
       - name: Set outputs
         id: set-outputs
         run: |
-          BATCH_START=${{ github.event.inputs.batch_start || 0 }}
-          BATCH_SIZE=${{ github.event.inputs.batch_size || 26 }}
+          BATCH_START=${{ github.event.inputs.batch_start || '0' }}
+          BATCH_SIZE=${{ github.event.inputs.batch_size || '26' }}
+          MAX_PARALLEL=${{ github.event.inputs.max_parallel || '5' }}
           BASE_DOMAIN=${{ github.event.inputs.base_domain || '.de' }}
-          DOMAIN_LENGTH=${{ github.event.inputs.domain_length || 4 }}
+          DOMAIN_LENGTH=${{ github.event.inputs.domain_length || '4' }}
           PATTERN=${{ github.event.inputs.pattern || 'D' }}
+          
+          # Ensure MAX_PARALLEL is never empty
+          if [ -z "$MAX_PARALLEL" ]; then
+            MAX_PARALLEL=5
+          fi
           
           echo "batch_start=$BATCH_START" >> $GITHUB_OUTPUT
           echo "batch_size=$BATCH_SIZE" >> $GITHUB_OUTPUT
+          echo "max_parallel=$MAX_PARALLEL" >> $GITHUB_OUTPUT
           echo "base_domain=$BASE_DOMAIN" >> $GITHUB_OUTPUT
           echo "domain_length=$DOMAIN_LENGTH" >> $GITHUB_OUTPUT
           echo "pattern=$PATTERN" >> $GITHUB_OUTPUT
@@ -276,7 +207,7 @@ jobs:
     timeout-minutes: 360  # 6 hours timeout
     strategy:
       matrix: ${{ fromJson(needs.prepare.outputs.job_matrix) }}
-      max-parallel: 5  # Limit concurrent jobs to prevent resource exhaustion
+      max-parallel: ${{ fromJson(needs.prepare.outputs.max_parallel) || 5 }}  # Limit concurrent jobs to prevent resource exhaustion
     steps:
       - uses: actions/checkout@v4
       
@@ -285,18 +216,24 @@ jobs:
         with:
           go-version: '1.22'
       
+      - name: Download config files
+        uses: actions/download-artifact@v4
+        with:
+          name: batch-configs
+          path: ./config/
+      
       - name: Create output directory
         run: mkdir -p ./results/batch_${{ matrix.letter }}
       
       - name: Run domain scanner for batch "${{ matrix.letter }}"
         run: |
           echo "Starting batch scan for domains starting with '${{ matrix.letter }}'"
-          echo "Config file: config/config_batch_${{ matrix.letter }}.toml"
+          echo "Config file: ./config/config_batch_${{ matrix.letter }}.toml"
           echo "Job index: ${{ matrix.index }}"
           
           # Run scanner with resource limits
           # Limit memory usage to prevent runner exhaustion
-          GOGC=20 go run . -config config/config_batch_${{ matrix.letter }}.toml
+          GOGC=20 go run . -config ./config/config_batch_${{ matrix.letter }}.toml
           
           echo "Batch scan completed for '${{ matrix.letter }}'"
       - name: Check disk space
@@ -323,6 +260,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+      
+      - name: Download config files
+        uses: actions/download-artifact@v4
+        with:
+          name: batch-configs
+          path: ./config/
       
       - name: Download all artifacts
         run: |

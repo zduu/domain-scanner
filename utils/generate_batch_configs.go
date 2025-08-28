@@ -19,7 +19,7 @@ func generateBatchConfigs() {
 	domainLength := 4
 	pattern := "D"
 	outputDir := "./results"
-	configDir := "./configs/batch"
+	configDir := "./config"
 	
 	for i := 0; i < len(args); i += 2 {
 		if i+1 >= len(args) {
@@ -154,33 +154,11 @@ output_dir = "%s"
 # Show detailed results in console (false for batch processing)
 verbose = false
 
-# Additional batch-specific settings
-# ==========================================
-
-# Performance tuning for batch operations
-# Use conservative settings to avoid rate limiting
-delay = 1000      # 1 second between requests
-workers = 10       # 10 concurrent workers
-show_registered = true # Capture all data for analysis
-
-# Scanning method priorities for this batch
-# DNS, WHOIS, and SSL checks provide comprehensive coverage
-[scanner.methods]
-dns_check = true   # Fast and reliable
-whois_check = true # Most authoritative
-ssl_check = true   # Confirms active sites
-http_check = false  # Disabled for performance
-
-# Output organization for batch results
-# Each batch gets its own directory structure
-output_dir = "%s"
-verbose = false     # Reduce noise in batch logs
-
 # Regex filter explanation:
 # ^%s.* - Matches domains starting with letter "%s"
 # This reduces the domain space significantly for faster scanning
 # Example for letter 'a': "a.*" matches "ab.de", "abc.de", etc.
-`, letter, domainLength, baseDomain, pattern, letter, regex, letter, letter, letter, letter, letter, batchOutputDir, batchOutputDir)
+`, letter, domainLength, baseDomain, pattern, letter, regex, letter, letter, batchOutputDir, letter, letter, letter)
 		
 		// Write config file
 		err := os.WriteFile(configPath, []byte(content), 0644)

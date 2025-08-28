@@ -134,7 +134,7 @@ go run main.go -config config/myconfig.toml
 ### 配置文件路径
 
 工作流中的配置文件路径已更新为：
-- 批量配置文件：`configs/batch/config_batch_{letter}.toml`
+- 批量配置文件：`config/config_batch_{letter}.toml`
 - 结果输出目录：`./results/batch_{letter}/`
 
 确保在运行工作流前，相关配置文件路径与实际文件结构一致。
@@ -168,15 +168,13 @@ go run main.go -config config/myconfig.toml
   - **动态配置**: 根据用户输入自动生成批量配置文件
   - **结果汇总**: 自动合并所有批次的结果并生成汇总报告
   - **超时保护**: 每个任务6小时超时，总体限时运行
-- **使用状态**: ⚠️ **需要修复** - 存在配置文件路径问题
+- **使用状态**: ✅ **完全可用** - 配置文件路径已修复
 
 ### 🚨 工作流可用性分析
 
 #### ✅ 完全可用的工作流
 - **go.yml**: 所有功能正常，无需修改
-
-#### ⚠️ 需要修复的工作流
-- **batch-domain-scan.yml**: 使用错误的路径 `configs/batch/`，需要修改为 `config/`
+- **batch-domain-scan.yml**: 已修复配置文件路径问题，完全可用
 
 ## 配置文件说明
 
@@ -290,7 +288,7 @@ sed 's/regex_filter_aabb = "^([a-z])\\\\1([a-z])\\\\2$"/regex_filter = "^([a-z])
 #### 4. **工作流选择**
 - 代码质量检查：使用 **go.yml**（自动触发）
 - 单次扫描：使用 **domain-scan.yml**（完全可用）
-- 批量扫描：使用 **batch-domain-scan.yml**（需要修复路径）
+- 批量扫描：使用 **batch-domain-scan.yml**（完全可用）
 
 ## 基本选项
 
