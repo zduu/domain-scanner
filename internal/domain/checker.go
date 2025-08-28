@@ -248,33 +248,22 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		}
 	}
 
-	// Check if we have WHOIS signature indicating registration
-	hasWHOISSignature := false
+	// Check if we have any registration signatures
+	hasRegistrationSignatures := false
 	for _, sig := range signatures {
-		if sig == "WHOIS" {
-			hasWHOISSignature = true
+		if sig == "DNS_NS" || sig == "DNS_A" || sig == "DNS_MX" || sig == "DNS_TXT" ||
+		   sig == "DNS_CNAME" || sig == "WHOIS" || sig == "SSL" {
+			hasRegistrationSignatures = true
 			break
 		}
 	}
 
-	// If we have WHOIS signature, domain is registered
-	if hasWHOISSignature {
+	// If we have clear registration signatures, domain is registered
+	if hasRegistrationSignatures {
 		return false, nil
 	}
 
-	// Check if we have other registration signatures (DNS, SSL)
-	// But these are less reliable, so we'll do additional WHOIS check
-	hasOtherSignatures := false
-	for _, sig := range signatures {
-		if sig == "DNS_NS" || sig == "DNS_A" || sig == "DNS_MX" || sig == "DNS_TXT" ||
-		   sig == "DNS_CNAME" || sig == "SSL" {
-			hasOtherSignatures = true
-			break
-		}
-	}
-
-	// Perform WHOIS check for final verification
-	// This is especially important if we have other signatures but no WHOIS signature
+	// If no signatures found, check WHOIS as final verification
 	maxRetries := 3  // Reduced retry count for speed
 	for i := 0; i < maxRetries; i++ {
 		result, err := whois.Whois(domain)
@@ -289,7 +278,7 @@ func CheckDomainAvailability(domain string) (bool, error) {
 				}
 			}
 
-			// Check for registration indicators as a secondary check
+			// Check for registration indicators
 			enhancedRegisteredIndicators := []string{
 				"registrar:",
 				"registrant:",
@@ -352,11 +341,6 @@ func CheckDomainAvailability(domain string) (bool, error) {
 		}
 	}
 
-	// If we have other signatures but WHOIS is inconclusive, consider it registered
-	if hasOtherSignatures {
-		return false, nil
-	}
-
-	// If we can't determine the status and have no signatures, assume available
+	// If we can't determine the status, assume the domain is available
 	return true, nil
 }

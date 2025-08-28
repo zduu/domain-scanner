@@ -166,8 +166,6 @@ func main() {
 		*pattern, *length, *workers)
 	if *regexFilter != "" {
 		fmt.Printf("Using regex filter: %s (base count: %d domains)\n", *regexFilter, baseDomainCount)
-	} else {
-		fmt.Printf("Total domains to check: %d\n", baseDomainCount)
 	}
 
 	// Create channels for jobs and results
@@ -213,8 +211,13 @@ func main() {
 			processedCount++
 			totalProcessed = processedCount // Update global counter
 
-			// Show progress with current count, will be updated when total is known
-			progress := fmt.Sprintf("[%d]", processedCount)
+			// Show progress - wait a bit for totalGenerated to be set
+			var progress string
+			if totalGenerated > 0 {
+				progress = fmt.Sprintf("[%d/%d]", processedCount, totalGenerated)
+			} else {
+				progress = fmt.Sprintf("[%d]", processedCount)
+			}
 
 			if result.Error != nil {
 				statusChan <- fmt.Sprintf("%s Error checking domain %s: %v", progress, result.Domain, result.Error)
