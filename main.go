@@ -100,28 +100,44 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Load config file if specified
+	// Load config file if specified and exists
 	if *configPath != "" {
-		var err error
-		appConfig, err = config.LoadConfig(*configPath)
-		if err != nil {
-			fmt.Printf("Error loading config file: %v\n", err)
-			os.Exit(1)
-		}
+		if _, err := os.Stat(*configPath); err == nil {
+			var err error
+			appConfig, err = config.LoadConfig(*configPath)
+			if err != nil {
+				fmt.Printf("Error loading config file: %v\n", err)
+				os.Exit(1)
+			}
 
-		// Set global config for domain checker
-		domain.SetConfig(appConfig)
+			// Set global config for domain checker
+			domain.SetConfig(appConfig)
 
-		// Override command line flags with config values
-		*length = appConfig.Domain.Length
-		*suffix = appConfig.Domain.Suffix
-		*pattern = appConfig.Domain.Pattern
-		if appConfig.Domain.RegexFilter != "" {
-			*regexFilter = appConfig.Domain.RegexFilter
+			// Override command line flags with config values only if they weren't explicitly set
+			if flag.Lookup("l").Value.String() == "3" { // Default value
+				*length = appConfig.Domain.Length
+			}
+			if flag.Lookup("s").Value.String() == ".li" { // Default value
+				*suffix = appConfig.Domain.Suffix
+			}
+			if flag.Lookup("p").Value.String() == "D" { // Default value
+				*pattern = appConfig.Domain.Pattern
+			}
+			if *regexFilter == "" && appConfig.Domain.RegexFilter != "" {
+				*regexFilter = appConfig.Domain.RegexFilter
+			}
+			if flag.Lookup("delay").Value.String() == "1000" { // Default value
+				*delay = appConfig.Scanner.Delay
+			}
+			if flag.Lookup("workers").Value.String() == "10" { // Default value
+				*workers = appConfig.Scanner.Workers
+			}
+			if flag.Lookup("show-registered").Value.String() == "false" { // Default value
+				*showRegistered = appConfig.Scanner.ShowRegistered
+			}
+		} else {
+			fmt.Printf("Config file %s not found, using command line parameters\n", *configPath)
 		}
-		*delay = appConfig.Scanner.Delay
-		*workers = appConfig.Scanner.Workers
-		*showRegistered = appConfig.Scanner.ShowRegistered
 	}
 
 	// Ensure suffix starts with a dot
@@ -164,10 +180,17 @@ func main() {
 	}
 
 	// Send jobs from domain generator
+	var totalGenerated int
 	go func() {
 		defer close(jobs)
+		domainCount := 0
 		for domain := range domainChan {
+			domainCount++
 			jobs <- domain
+		}
+		totalGenerated = domainCount
+		if appConfig != nil && appConfig.Output.Verbose {
+			fmt.Printf("DEBUG: Total domains generated: %d\n", domainCount)
 		}
 	}()
 
@@ -183,12 +206,14 @@ func main() {
 
 	// Collect results
 	var wg sync.WaitGroup
+	var totalProcessed int
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		processedCount := 0
 		for result := range results {
 			processedCount++
+			totalProcessed = processedCount // Update global counter
 			progress := fmt.Sprintf("[%d]", processedCount)
 			if result.Error != nil {
 				statusChan <- fmt.Sprintf("%s Error checking domain %s: %v", progress, result.Domain, result.Error)
@@ -198,10 +223,19 @@ func main() {
 			if result.Available {
 				statusChan <- fmt.Sprintf("%s Domain %s is AVAILABLE!", progress, result.Domain)
 				availableDomains = append(availableDomains, result.Domain)
-			} else if *showRegistered {
-				sigStr := strings.Join(result.Signatures, ", ")
-				statusChan <- fmt.Sprintf("%s Domain %s is REGISTERED [%s]", progress, result.Domain, sigStr)
-				registeredDomains = append(registeredDomains, result.Domain)
+			} else {
+				// Always count registered domains, but only show if requested
+				if *showRegistered {
+					sigStr := strings.Join(result.Signatures, ", ")
+					statusChan <- fmt.Sprintf("%s Domain %s is REGISTERED [%s]", progress, result.Domain, sigStr)
+					registeredDomains = append(registeredDomains, result.Domain)
+				} else {
+					// Still log for debugging but don't add to array
+					if appConfig != nil && appConfig.Output.Verbose {
+						sigStr := strings.Join(result.Signatures, ", ")
+						statusChan <- fmt.Sprintf("%s Domain %s is REGISTERED [%s] (not shown)", progress, result.Domain, sigStr)
+					}
+				}
 			}
 		}
 		close(statusChan)
@@ -209,12 +243,18 @@ func main() {
 
 	// Monitor task completion
 	go func() {
-		// Wait for all domains to be generated and processed
-		for range domainChan {
-			// domainChan closes when generation is complete
+		// Wait for all jobs to be sent
+		for totalGenerated == 0 {
+			time.Sleep(100 * time.Millisecond)
 		}
-		// Wait for all workers to finish processing
-		time.Sleep(2 * time.Second)
+
+		// Wait for all results to be processed
+		for totalProcessed < totalGenerated {
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		// Give a bit more time for final processing
+		time.Sleep(1 * time.Second)
 		close(results)
 	}()
 
@@ -299,10 +339,12 @@ func main() {
 		fmt.Printf("- Registered domains: %s\n", registeredFile)
 	}
 	fmt.Printf("\nSummary:\n")
-	totalProcessed := len(availableDomains) + len(registeredDomains)
 	fmt.Printf("- Total domains processed: %d\n", totalProcessed)
 	fmt.Printf("- Available domains: %d\n", len(availableDomains))
 	if *showRegistered {
 		fmt.Printf("- Registered domains: %d\n", len(registeredDomains))
+	} else {
+		registeredCount := totalProcessed - len(availableDomains)
+		fmt.Printf("- Registered domains: %d (not saved to file)\n", registeredCount)
 	}
 }

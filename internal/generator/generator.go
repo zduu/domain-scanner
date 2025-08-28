@@ -68,6 +68,7 @@ func generateCombinationsIterative(domainChan chan<- string, charset string, len
 		total *= charsetSize
 	}
 
+	sentCount := 0
 	for counter := 0; counter < total; counter++ {
 		current := ""
 		temp := counter
@@ -106,6 +107,7 @@ func generateCombinationsIterative(domainChan chan<- string, charset string, len
 		}
 
 		if match {
+			sentCount++
 			domainChan <- domain
 		}
 	}
