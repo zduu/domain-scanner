@@ -165,7 +165,9 @@ func main() {
 	fmt.Printf("Checking domains with pattern %s and length %d using %d workers...\n",
 		*pattern, *length, *workers)
 	if *regexFilter != "" {
-		fmt.Printf("Using regex filter: %s (base count: %d domains)\n", *regexFilter, baseDomainCount)
+		fmt.Printf("Using regex filter: %s (domain space: %d)\n", *regexFilter, baseDomainCount)
+	} else {
+		fmt.Printf("Total domains to check: %d\n", baseDomainCount)
 	}
 
 	// Create channels for jobs and results
