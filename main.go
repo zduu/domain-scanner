@@ -248,7 +248,11 @@ func main() {
 		fmt.Printf("Error creating output file: %v\n", err)
 		os.Exit(1)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Printf("Error closing file: %v\n", closeErr)
+		}
+	}()
 
 	for _, domain := range availableDomains {
 		_, err := file.WriteString(domain + "\n")
@@ -277,7 +281,11 @@ func main() {
 			fmt.Printf("Error creating registered domains file: %v\n", err)
 			os.Exit(1)
 		}
-		defer regFile.Close()
+		defer func() {
+			if closeErr := regFile.Close(); closeErr != nil {
+				fmt.Printf("Error closing registered domains file: %v\n", closeErr)
+			}
+		}()
 
 		for _, domain := range registeredDomains {
 			_, err := regFile.WriteString(domain + "\n")
