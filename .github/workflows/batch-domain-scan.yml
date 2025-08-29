@@ -102,6 +102,7 @@ on:
         default: '4'
         type: choice
         options:
+          - 2
           - 3
           - 4
           - 5
