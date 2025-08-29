@@ -119,6 +119,7 @@ on:
 permissions:
   contents: read
   actions: read
+  id-token: write
 
 jobs:
   prepare:
@@ -262,25 +263,27 @@ jobs:
     if: always()
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-      
+
       - name: Download config files
         uses: actions/download-artifact@v4
         with:
           name: batch-configs
           path: ./config/
-      
+
       - name: Download all artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           BATCH_START=${{ needs.prepare.outputs.batch_start }}
           BATCH_SIZE=${{ needs.prepare.outputs.batch_size }}
-          
+
           echo "Downloading results for all batches..."
-          
+
           for ((i=BATCH_START; i<BATCH_START+BATCH_SIZE; i++)); do
             LETTER=$(echo "abcdefghijklmnopqrstuvwxyz" | cut -c$((i+1)))
             echo "Downloading results for batch $LETTER"
