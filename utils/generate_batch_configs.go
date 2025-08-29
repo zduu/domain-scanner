@@ -91,7 +91,7 @@ func generateBatchConfigs() {
 	fmt.Printf("Output directory: %s\n", outputDir)
 	
 	for i := startIdx; i < endIdx; i++ {
-		char := string(letters[i])
+		char := string(charset[i])
 		configPath := fmt.Sprintf("%s/config_batch_%s.toml", configDir, char)
 		batchOutputDir := fmt.Sprintf("%s/batch_%s", outputDir, char)
 
@@ -104,8 +104,8 @@ func generateBatchConfigs() {
 			// For digits, create regex that matches domains starting with this digit
 			regex = fmt.Sprintf("^%s.*", char)
 		case "a": // Alphanumeric
-			// For alphanumeric, use letters for batching but allow both letters and digits
-			regex = fmt.Sprintf("^%s[a-z0-9].*", char)
+			// For alphanumeric, match domains starting with this character (letter or digit)
+			regex = fmt.Sprintf("^%s.*", char)
 		}
 		
 		var charType string
