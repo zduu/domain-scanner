@@ -36,9 +36,9 @@ on:
           - 24
           - 25
       batch_size:
-        description: 'Number of batches to run (1-26)'
+        description: 'Number of batches to run (Letters: 1-26, Digits: 1-10, Alphanumeric: 1-36)'
         required: false
-        default: '26'
+        default: '10'
         type: choice
         options:
           - 1
@@ -67,6 +67,16 @@ on:
           - 24
           - 25
           - 26
+          - 27
+          - 28
+          - 29
+          - 30
+          - 31
+          - 32
+          - 33
+          - 34
+          - 35
+          - 36
       max_parallel:
         description: 'Maximum number of concurrent jobs (1-10)'
         required: false
@@ -194,12 +204,35 @@ jobs:
           echo "domain_length=$DOMAIN_LENGTH" >> $GITHUB_OUTPUT
           echo "pattern=$PATTERN" >> $GITHUB_OUTPUT
           
-          # Generate job matrix
+          # Generate job matrix based on pattern
+          case "$PATTERN" in
+            "D")
+              CHARSET="abcdefghijklmnopqrstuvwxyz"
+              MAX_BATCHES=26
+              ;;
+            "d")
+              CHARSET="0123456789"
+              MAX_BATCHES=10
+              ;;
+            "a")
+              CHARSET="abcdefghijklmnopqrstuvwxyz0123456789"
+              MAX_BATCHES=36
+              ;;
+            *)
+              echo "Invalid pattern: $PATTERN"
+              exit 1
+              ;;
+          esac
+
           MATRIX='{"include":['
           END_INDEX=$((BATCH_START + BATCH_SIZE - 1))
+          if [ $END_INDEX -ge $MAX_BATCHES ]; then
+            END_INDEX=$((MAX_BATCHES - 1))
+          fi
+
           for ((i=BATCH_START; i<=END_INDEX; i++)); do
-            LETTER=$(echo "abcdefghijklmnopqrstuvwxyz" | cut -c$((i+1)))
-            MATRIX+="{\"letter\":\"$LETTER\",\"index\":$i}"
+            CHAR=$(echo "$CHARSET" | cut -c$((i+1)))
+            MATRIX+="{\"char\":\"$CHAR\",\"index\":$i}"
             if [ $i -lt $END_INDEX ]; then
               MATRIX+=","
             fi
@@ -230,21 +263,21 @@ jobs:
       
       - name: Create output directory
         run: |
-          BATCH_OUTPUT_DIR="./results/batch_${{ matrix.letter }}"
+          BATCH_OUTPUT_DIR="./results/batch_${{ matrix.char }}"
           mkdir -p "$BATCH_OUTPUT_DIR"
           echo "Created output directory: $BATCH_OUTPUT_DIR"
-      
-      - name: Run domain scanner for batch "${{ matrix.letter }}"
+
+      - name: Run domain scanner for batch "${{ matrix.char }}"
         run: |
-          echo "Starting batch scan for domains starting with '${{ matrix.letter }}'"
-          echo "Config file: ./config/config_batch_${{ matrix.letter }}.toml"
+          echo "Starting batch scan for domains starting with '${{ matrix.char }}'"
+          echo "Config file: ./config/config_batch_${{ matrix.char }}.toml"
           echo "Job index: ${{ matrix.index }}"
 
           # Run scanner with optimized settings
           # Limit memory usage to prevent runner exhaustion
-          GOGC=30 go run . -config ./config/config_batch_${{ matrix.letter }}.toml
+          GOGC=30 go run . -config ./config/config_batch_${{ matrix.char }}.toml
 
-          echo "Batch scan completed for '${{ matrix.letter }}'"
+          echo "Batch scan completed for '${{ matrix.char }}'"
       - name: Check disk space
         if: always()
         run: df -h
@@ -252,11 +285,11 @@ jobs:
         if: always()
         run: free -h
       
-      - name: Upload results for batch "${{ matrix.letter }}"
+      - name: Upload results for batch "${{ matrix.char }}"
         uses: actions/upload-artifact@v4
         with:
-          name: domain-scan-results-batch-${{ matrix.letter }}
-          path: ./results/batch_${{ matrix.letter }}/
+          name: domain-scan-results-batch-${{ matrix.char }}
+          path: ./results/batch_${{ matrix.char }}/
 
   summarize:
     needs: [scan, prepare]
@@ -282,13 +315,39 @@ jobs:
         run: |
           BATCH_START=${{ needs.prepare.outputs.batch_start }}
           BATCH_SIZE=${{ needs.prepare.outputs.batch_size }}
+          PATTERN=${{ needs.prepare.outputs.pattern }}
 
           echo "Downloading results for all batches..."
 
-          for ((i=BATCH_START; i<BATCH_START+BATCH_SIZE; i++)); do
-            LETTER=$(echo "abcdefghijklmnopqrstuvwxyz" | cut -c$((i+1)))
-            echo "Downloading results for batch $LETTER"
-            gh run download ${{ github.run_id }} --name domain-scan-results-batch-$LETTER --dir batch_results || echo "No results found for batch $LETTER"
+          # Determine charset based on pattern
+          case "$PATTERN" in
+            "D")
+              CHARSET="abcdefghijklmnopqrstuvwxyz"
+              MAX_BATCHES=26
+              ;;
+            "d")
+              CHARSET="0123456789"
+              MAX_BATCHES=10
+              ;;
+            "a")
+              CHARSET="abcdefghijklmnopqrstuvwxyz0123456789"
+              MAX_BATCHES=36
+              ;;
+            *)
+              echo "Invalid pattern: $PATTERN"
+              exit 1
+              ;;
+          esac
+
+          END_INDEX=$((BATCH_START + BATCH_SIZE - 1))
+          if [ $END_INDEX -ge $MAX_BATCHES ]; then
+            END_INDEX=$((MAX_BATCHES - 1))
+          fi
+
+          for ((i=BATCH_START; i<=END_INDEX; i++)); do
+            CHAR=$(echo "$CHARSET" | cut -c$((i+1)))
+            echo "Downloading results for batch $CHAR"
+            gh run download ${{ github.run_id }} --name domain-scan-results-batch-$CHAR --dir batch_results || echo "No results found for batch $CHAR"
           done
       
       - name: Combine results

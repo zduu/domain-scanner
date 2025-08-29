@@ -56,12 +56,29 @@ func generateBatchConfigs() {
 	}
 	
 	// Generate configurations
-	letters := "abcdefghijklmnopqrstuvwxyz"
+	var charset string
+	var maxBatches int
+
+	switch pattern {
+	case "D": // Letters only
+		charset = "abcdefghijklmnopqrstuvwxyz"
+		maxBatches = 26
+	case "d": // Digits only
+		charset = "0123456789"
+		maxBatches = 10
+	case "a": // Alphanumeric - include both letters and digits for complete coverage
+		charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+		maxBatches = 36
+	default:
+		fmt.Printf("Invalid pattern: %s. Use D for letters, d for digits, a for alphanumeric\n", pattern)
+		os.Exit(1)
+	}
+
 	startIdx := batchStart
 	endIdx := batchStart + batchSize
-	
-	if endIdx > len(letters) {
-		endIdx = len(letters)
+
+	if endIdx > maxBatches {
+		endIdx = maxBatches
 	}
 	
 	fmt.Printf("Generating batch configurations...\n")
@@ -74,23 +91,34 @@ func generateBatchConfigs() {
 	fmt.Printf("Output directory: %s\n", outputDir)
 	
 	for i := startIdx; i < endIdx; i++ {
-		letter := string(letters[i])
-		configPath := fmt.Sprintf("%s/config_batch_%s.toml", configDir, letter)
-		batchOutputDir := fmt.Sprintf("%s/batch_%s", outputDir, letter)
-		
+		char := string(letters[i])
+		configPath := fmt.Sprintf("%s/config_batch_%s.toml", configDir, char)
+		batchOutputDir := fmt.Sprintf("%s/batch_%s", outputDir, char)
+
 		// Create regex based on pattern
 		regex := ""
 		switch pattern {
 		case "D": // Letters only
-			regex = fmt.Sprintf("^%s.*", letter)
+			regex = fmt.Sprintf("^%s.*", char)
 		case "d": // Digits only
-			// For digits, we'll use patterns that start with the letter but contain digits
-			regex = fmt.Sprintf("^[0-9]{%d}", domainLength)
+			// For digits, create regex that matches domains starting with this digit
+			regex = fmt.Sprintf("^%s.*", char)
 		case "a": // Alphanumeric
-			regex = fmt.Sprintf("^%s[a-z0-9].*", letter)
+			// For alphanumeric, use letters for batching but allow both letters and digits
+			regex = fmt.Sprintf("^%s[a-z0-9].*", char)
 		}
 		
-		content := fmt.Sprintf(`# Batch domain scanner configuration for letter "%s"
+		var charType string
+		switch pattern {
+		case "D":
+			charType = "letter"
+		case "d":
+			charType = "digit"
+		case "a":
+			charType = "character"
+		}
+
+		content := fmt.Sprintf(`# Batch domain scanner configuration for %s "%s"
 # Auto-generated for batch processing
 # Generated at: $(date)
 
@@ -104,12 +132,12 @@ suffix = "%s"
 
 # Domain pattern:
 # D: Pure letters (e.g., abc.de)
-# d: Pure numbers (e.g., 123.de) 
+# d: Pure numbers (e.g., 123.de)
 # a: Alphanumeric (e.g., a1b.de)
 pattern = "%s"
 
 # Regular expression filter for domains starting with "%s"
-# This ensures only domains starting with this letter are scanned
+# This ensures only domains starting with this %s are scanned
 regex_filter = "%s"
 
 # Scanner behavior configuration
@@ -151,14 +179,14 @@ special_status_file = "special_status_domains_batch_%s_{pattern}_{length}_{suffi
 # Output directory for this batch
 output_dir = "%s"
 
-# Show detailed results in console (enabled for dc1.de debugging)
+# Show detailed results in console (enabled for debugging)
 verbose = true
 
 # Regex filter explanation:
-# ^%s.* - Matches domains starting with letter "%s"
+# ^%s.* - Matches domains starting with %s "%s"
 # This reduces the domain space significantly for faster scanning
-# Example for letter 'a': "a.*" matches "ab.de", "abc.de", etc.
-`, letter, domainLength, baseDomain, pattern, letter, regex, letter, letter, letter, batchOutputDir, letter, letter)
+# Example for %s 'a': "a.*" matches "ab.de", "abc.de", etc.
+`, charType, char, domainLength, baseDomain, pattern, char, charType, regex, char, char, char, batchOutputDir, char, charType, char, charType)
 		
 		// Write config file
 		err := os.WriteFile(configPath, []byte(content), 0644)
@@ -202,11 +230,20 @@ Output Directory: %s
 ===================================`, startIdx, endIdx-1, endIdx-startIdx, baseDomain, domainLength, pattern, configDir, outputDir)
 	
 	for i := startIdx; i < endIdx; i++ {
-		letter := string(letters[i])
-		configPath := fmt.Sprintf("config_batch_%s.toml", letter)
-		outputPath := fmt.Sprintf("%s/batch_%s", outputDir, letter)
-		indexContent += fmt.Sprintf("\nBatch %2d: Letter '%s' -> %s\n  Config: %s\n  Output: %s\n", 
-			i-startIdx+1, letter, letter, configPath, outputPath)
+		char := string(charset[i])
+		configPath := fmt.Sprintf("config_batch_%s.toml", char)
+		outputPath := fmt.Sprintf("%s/batch_%s", outputDir, char)
+		var charType string
+		switch pattern {
+		case "D":
+			charType = "Letter"
+		case "d":
+			charType = "Digit"
+		case "a":
+			charType = "Character"
+		}
+		indexContent += fmt.Sprintf("\nBatch %2d: %s '%s' -> %s\n  Config: %s\n  Output: %s\n",
+			i-startIdx+1, charType, char, char, configPath, outputPath)
 	}
 	
 	if err := os.WriteFile(indexFile, []byte(indexContent), 0644); err != nil {
