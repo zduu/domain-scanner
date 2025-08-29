@@ -9,6 +9,13 @@ type DomainResult struct {
 	SpecialStatus string
 }
 
+// SpecialStatusDomain represents a domain with special status
+type SpecialStatusDomain struct {
+	Domain string
+	Status string
+	Reason string
+}
+
 // RegexMode defines how regex patterns should be applied
 type RegexMode int
 

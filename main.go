@@ -270,6 +270,14 @@ func main() {
 
 	wg.Wait()
 
+	// Get special status domains from the domain checker
+	specialStatusDomainsFromChecker := domain.GetSpecialStatusDomains()
+
+	// Convert to simple string slice for compatibility with existing code
+	for _, ssd := range specialStatusDomainsFromChecker {
+		specialStatusDomains = append(specialStatusDomains, ssd.Domain)
+	}
+
 	// Save available domains to file
 	availableFile := fmt.Sprintf("available_domains_%s_%d_%s.txt", *pattern, *length, strings.TrimPrefix(*suffix, "."))
 	if appConfig != nil && appConfig.Output.AvailableFile != "" {
@@ -368,12 +376,40 @@ func main() {
 				}
 			}()
 
-			for _, domain := range specialStatusDomains {
-				_, err := specialFile.WriteString(domain + "\n")
-				if err != nil {
-					fmt.Printf("Error writing to special status file: %v\n", err)
-					break
+			// Write header
+			_, err := specialFile.WriteString("# Special Status Domains\n")
+			if err == nil {
+				_, err = specialFile.WriteString("# Format: domain status reason\n")
+			}
+			if err == nil {
+				_, err = specialFile.WriteString("#\n")
+			}
+
+			if err == nil {
+				// Write detailed special status information
+				for _, ssd := range specialStatusDomainsFromChecker {
+					line := fmt.Sprintf("%s %s %s\n", ssd.Domain, ssd.Status, ssd.Reason)
+					_, err = specialFile.WriteString(line)
+					if err != nil {
+						fmt.Printf("Error writing to special status file: %v\n", err)
+						break
+					}
 				}
+
+				// Also write simple domain list for backward compatibility
+				if len(specialStatusDomainsFromChecker) == 0 {
+					for _, domain := range specialStatusDomains {
+						_, err := specialFile.WriteString(domain + " UNKNOWN Unknown_status\n")
+						if err != nil {
+							fmt.Printf("Error writing to special status file: %v\n", err)
+							break
+						}
+					}
+				}
+			}
+
+			if err != nil {
+				fmt.Printf("Error writing special status file header: %v\n", err)
 			}
 		}
 	}

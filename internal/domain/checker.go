@@ -21,6 +21,10 @@ var (
 	// Global config reference
 	globalConfig *types.Config
 
+	// Special status tracking
+	specialStatusDomains []types.SpecialStatusDomain
+	specialStatusMutex   sync.Mutex
+
 	// WHOIS indicators for domain status detection
 	registeredIndicators = []string{
 		"registrar:",
@@ -397,7 +401,12 @@ func CheckDomainAvailability(domain string) (bool, error) {
 			// Check for special status indicators
 			specialStatusIndicators := []string{
 				"status: redemptionperiod",
+				"status: redemption period",
+				"status: redemption",
+				"redemptionperiod",
+				"redemption period",
 				"status: pendingdelete",
+				"status: pending delete",
 				"status: hold",
 				"status: inactive",
 				"status: suspended",
@@ -407,12 +416,20 @@ func CheckDomainAvailability(domain string) (bool, error) {
 				"status: transfer",
 				"status: grace",
 				"status: autorenewperiod",
-				"status: redemption",
+				"status: auto renew period",
 				"status: expire",
+				"status: expired",
+				"status: clienthold",
+				"status: client hold",
+				"status: serverhold",
+				"status: server hold",
 			}
 
 			for _, indicator := range specialStatusIndicators {
 				if strings.Contains(result, indicator) {
+					// Extract the status type for better tracking
+					statusType := strings.TrimPrefix(indicator, "status: ")
+					addToSpecialStatus(domain, strings.ToUpper(statusType))
 					return false, nil
 				}
 			}
@@ -499,7 +516,33 @@ func handleRateLimitedDomain(domain string, hasDNSSignatures bool) (bool, error)
 
 // addToSpecialStatus adds a domain to the special status tracking
 func addToSpecialStatus(domain, reason string) {
-	// This will be handled by the main scanning logic to write to special status file
-	// For now, we'll just log it
+	specialStatusMutex.Lock()
+	defer specialStatusMutex.Unlock()
+
+	specialStatusDomains = append(specialStatusDomains, types.SpecialStatusDomain{
+		Domain: domain,
+		Status: reason,
+		Reason: fmt.Sprintf("WHOIS status: %s", reason),
+	})
+
+	// Also log for immediate visibility
 	fmt.Printf("SPECIAL STATUS: %s - %s\n", domain, reason)
+}
+
+// GetSpecialStatusDomains returns all domains with special status
+func GetSpecialStatusDomains() []types.SpecialStatusDomain {
+	specialStatusMutex.Lock()
+	defer specialStatusMutex.Unlock()
+
+	// Return a copy to avoid race conditions
+	result := make([]types.SpecialStatusDomain, len(specialStatusDomains))
+	copy(result, specialStatusDomains)
+	return result
+}
+
+// ClearSpecialStatusDomains clears the special status domains list
+func ClearSpecialStatusDomains() {
+	specialStatusMutex.Lock()
+	defer specialStatusMutex.Unlock()
+	specialStatusDomains = nil
 }
