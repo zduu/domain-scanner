@@ -500,18 +500,19 @@ func handleRateLimitedDomain(domain string, hasDNSSignatures bool) (bool, error)
 	}
 
 	// No DNS signatures and WHOIS unavailable - this is uncertain
-	// We'll mark it as available but add it to special status for manual review
+	// We'll add it to special status for manual review and NOT mark as available
 	if globalConfig != nil {
 		// Add to special status list for manual review
 		addToSpecialStatus(domain, "WHOIS_RATE_LIMITED")
 	}
 
 	if domain == "dc1.de" {
-		fmt.Printf("DEBUG dc1.de: No DNS signatures, marking as AVAILABLE but adding to special status\n")
+		fmt.Printf("DEBUG dc1.de: No DNS signatures, adding to special status (NOT marking as available)\n")
 	}
 
-	// Return as available, but it's been flagged for special attention
-	return true, nil
+	// Return as NOT available since we can't determine the status
+	// The domain will be tracked in special status instead
+	return false, nil
 }
 
 // addToSpecialStatus adds a domain to the special status tracking

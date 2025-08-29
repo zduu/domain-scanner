@@ -369,7 +369,8 @@ jobs:
           # Count results
           AVAILABLE_COUNT=$(wc -l < combined_results/available_domains_all.txt || echo "0")
           REGISTERED_COUNT=$(wc -l < combined_results/registered_domains_all.txt || echo "0")
-          SPECIAL_COUNT=$(wc -l < combined_results/special_status_domains_all.txt || echo "0")
+          # Count only non-comment lines in special status file
+          SPECIAL_COUNT=$(grep -v '^#' combined_results/special_status_domains_all.txt | grep -v '^$' | wc -l || echo "0")
           
           echo "Results Summary:"
           echo "Available domains: $AVAILABLE_COUNT"
@@ -408,7 +409,7 @@ jobs:
           echo "### Summary" >> $GITHUB_STEP_SUMMARY
           echo "- Available domains: $(wc -l < combined_results/available_domains_all.txt)" >> $GITHUB_STEP_SUMMARY
           echo "- Registered domains: $(wc -l < combined_results/registered_domains_all.txt)" >> $GITHUB_STEP_SUMMARY
-          echo "- Special status domains: $(wc -l < combined_results/special_status_domains_all.txt)" >> $GITHUB_STEP_SUMMARY
+          echo "- Special status domains: $(grep -v '^#' combined_results/special_status_domains_all.txt | grep -v '^$' | wc -l || echo "0")" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Sample Available Domains" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

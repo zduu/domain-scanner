@@ -23,3 +23,4 @@ CLAUDE.md
 .DS_Store
 domain-scanner-main/
 config/
+domain-scan-results-combined/
