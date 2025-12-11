@@ -67,7 +67,7 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-username/domain-scanner.git
+git clone https://github.com/zduu/domain-scanner.git
 cd domain-scanner
 
 # 安装依赖
